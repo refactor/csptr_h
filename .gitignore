@@ -1,0 +1,7 @@
+*.sw[op]
+*.out
+test
+*.o
+*.spv
+.idea/
+bin/
