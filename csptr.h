@@ -129,7 +129,7 @@ CSPTR_INLINE void sfree_stack(void *ptr) {
         };                                                                  \
         void *var = smalloc(sizeof (Type), Length, Kind, ARGS_);            \
         if (var != NULL)                                                    \
-            memcpy(var, &args.value, sizeof (Type) * Length);               \
+            memcpy(var, args.value, sizeof (Type) * Length);               \
         var;                                                                \
     })
 

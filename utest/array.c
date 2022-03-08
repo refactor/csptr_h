@@ -15,6 +15,25 @@ TEST array(void) {
     CHECK_CALL(assert_valid_array(arr, ARRAY_SIZE, sizeof(int)));
     PASS();
 }
+TEST array1(void) {
+    int va[] = {1,2,3,4,5,6,7};
+    smart int *arr = shared_arr(int, 7, va);//(int[7]){1,2,3,4,5,6,7});
+    CHECK_CALL(assert_valid_array(arr, 7, sizeof(int)));
+    for (size_t i=0; i<sizeof(va)/sizeof(va[0]); ++i)
+        ASSERT_EQ_FMT(va[i], arr[i], "%d");
+    PASS();
+}
+
+TEST array2(void) {
+    f_destructor print_int = lambda(void, (void *ptr, void *meta) {
+        (void) meta;
+        // ptr points to the current element
+        // meta points to the array metadata (global to the array), if any.
+        printf("dtor --> %d\n", *(int*) ptr);
+    });
+    smart int *ints = unique_ptr(int[5], {5, 4, 3, 2, 1}, print_int);
+    PASS();
+}
 
 TEST array_dtor_run(void) {
     int dtor_run = 0;
@@ -23,7 +42,7 @@ TEST array_dtor_run(void) {
             (void)ptr;
             //ASSERT_EQ(arr + dtor_run, ptr);
             dtor_run++;
-            });
+        });
     arr = unique_ptr(int[ARRAY_SIZE], {}, dtor);
     CHECK_CALL(assert_valid_array(arr, ARRAY_SIZE, sizeof(int)));
 
@@ -55,6 +74,8 @@ TEST array_dtor_run_with_meta(void) {
 
 GREATEST_SUITE(array_suite) {
     RUN_TEST(array);
+    RUN_TEST(array1);
+    RUN_TEST(array2);
     RUN_TEST(array_dtor_run);
     RUN_TEST(array_meta);
     RUN_TEST(array_dtor_run_with_meta);
