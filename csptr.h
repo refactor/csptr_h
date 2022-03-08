@@ -40,6 +40,7 @@ enum pointer_kind {
     UNIQUE,
     SHARED,
 
+    FLEXIBLE_ARRAY = 1 << 7,
     ARRAY = 1 << 8
 };
 
@@ -64,7 +65,7 @@ typedef struct {
     } meta;
 } s_smalloc_args;
 
-CSPTR_PURE void *get_smart_ptr_meta(void *ptr);
+CSPTR_PURE void *get_smart_ptr_meta(const void * const ptr);
 void *sref(void *ptr);
 CSPTR_MALLOC_API void *smalloc_(s_smalloc_args *args);
 void sfree(void *ptr);
@@ -88,6 +89,7 @@ CSPTR_INLINE void sfree_stack(void *ptr) {
 
 # define ARGS_ args.dtor, { args.meta.ptr, args.meta.size }
 
+# define autoclean __attribute__ ((cleanup(sfree_stack)))
 # define smart __attribute__ ((cleanup(sfree_stack)))
 # define smart_ptr(Kind, Type, ...)                                         \
     ({                                                                      \
@@ -129,9 +131,38 @@ CSPTR_INLINE void sfree_stack(void *ptr) {
         };                                                                  \
         void *var = smalloc(sizeof (Type), Length, Kind, ARGS_);            \
         if (var != NULL)                                                    \
-            memcpy(var, args.value, sizeof (Type) * Length);               \
+            memcpy(var, args.value, sizeof (Type) * Length);                \
         var;                                                                \
     })
+
+# define smart_flex_arr(Kind, FAStruct, ArrField, LenField, ...)                            \
+    ({                                                                                      \
+        struct s_tmp {                                                                      \
+            CSPTR_SENTINEL_DEC                                                              \
+            __typeof__(FAStruct) sv;                                                        \
+            __typeof__(((FAStruct*)0)->ArrField[0])* av;                                    \
+            f_destructor dtor;                                                              \
+            struct {                                                                        \
+                const void *ptr;                                                            \
+                size_t size;                                                                \
+            } meta;                                                                         \
+        } args = {                                                                          \
+            CSPTR_SENTINEL                                                                  \
+            __VA_ARGS__                                                                     \
+        };                                                                                  \
+        size_t Length = args.sv.LenField;                                                   \
+        size_t FASize = sizeof(FAStruct) + sizeof (((FAStruct*)0)->ArrField[0]) * Length;   \
+        void *var = smalloc(FASize, 0, Kind|FLEXIBLE_ARRAY, ARGS_);                         \
+        if (var != NULL) {                                                                  \
+            *((FAStruct*)var) = args.sv;                                                    \
+            char *arr = (char*)var + offsetof(FAStruct,ArrField);                           \
+            memcpy(arr, args.av, sizeof (((FAStruct*)0)->ArrField[0]) * Length);            \
+        }                                                                                   \
+        var;                                                                                \
+    })
+
+#define shared_flexarr(FAStruct, ArrField, LenField, ...) smart_flex_arr(SHARED, FAStruct, ArrField, LenField, __VA_ARGS__)
+#define unique_flexarr(FAStruct, ArrField, LenField, ...) smart_flex_arr(UNIQUE, FAStruct, ArrField, LenField, __VA_ARGS__)
 
 # define shared_ptr(Type, ...) smart_ptr(SHARED, Type, __VA_ARGS__)
 # define unique_ptr(Type, ...) smart_ptr(UNIQUE, Type, __VA_ARGS__)
@@ -195,7 +226,7 @@ CSPTR_INLINE size_t align(size_t s) {
     return (s + (sizeof (char *) - 1)) & ~(sizeof (char *) - 1);
 }
 
-CSPTR_PURE CSPTR_INLINE s_meta *get_meta(void *ptr) {
+CSPTR_PURE CSPTR_INLINE s_meta *get_meta(const void * const ptr) {
     size_t *size = (size_t *) ptr - 1;
     return (s_meta *) ((char *) size - *size);
 }
@@ -237,7 +268,7 @@ static CSPTR_INLINE size_t atomic_decrement(volatile size_t *count) {
 #endif
 }
 
-CSPTR_INLINE void *get_smart_ptr_meta(void *ptr) {
+CSPTR_INLINE void *get_smart_ptr_meta(const void * const ptr) {
     assert((size_t) ptr == align((size_t) ptr));
 
     s_meta *meta = get_meta(ptr);
@@ -306,7 +337,11 @@ CSPTR_INLINE static void dealloc_entry(s_meta *meta, void *ptr) {
             s_meta_array *arr_meta = (void *) (meta + 1);
             for (size_t i = 0; i < arr_meta->nmemb; ++i)
                 meta->dtor((char *) ptr + arr_meta->size * i, user_meta);
-        } else
+        }
+        else if (meta->kind & FLEXIBLE_ARRAY) {
+            meta->dtor(ptr, user_meta);
+        }
+        else
             meta->dtor(ptr, user_meta);
     }
 
