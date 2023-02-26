@@ -153,10 +153,10 @@ typedef struct {
     size_t size;
 } s_meta_array;
 
-CSPTR_PURE size_t array_length(void *ptr);
+CSPTR_PURE size_t array_length(const void *ptr);
 
 CSPTR_PURE size_t array_type_size(void *ptr);
-CSPTR_PURE size_t array_size(void *ptr);
+CSPTR_PURE size_t array_size(const void *ptr);
 
 CSPTR_PURE void *array_user_meta(void *ptr);
 
@@ -166,7 +166,7 @@ CSPTR_PURE void *array_user_meta(void *ptr);
 #ifdef MY_LIBCSPTR_IMPLEMENTATION
 
 
-CSPTR_PURE size_t array_length(void *ptr) {
+CSPTR_PURE size_t array_length(const void *ptr) {
     s_meta_array *meta = get_smart_ptr_meta(ptr);
     return meta ? meta->nmemb : 0;
 }
@@ -176,7 +176,7 @@ CSPTR_PURE size_t array_type_size(void *ptr) {
     return meta ? meta->size : 0;
 }
 
-CSPTR_PURE size_t array_size(void *ptr) {
+CSPTR_PURE size_t array_size(const void *ptr) {
     s_meta_array *meta = get_smart_ptr_meta(ptr);
     return meta ? meta->size * meta->nmemb : 0;
 }

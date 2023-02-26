@@ -4,10 +4,10 @@
 #define ARRAY_SIZE 25
 
 static enum greatest_test_res
-assert_valid_array(void *ptr, size_t len, size_t size) {
+assert_valid_array(void *ptr, size_t len, size_t element_size) {
     ASSERT_EQm("Mismatching array lengths.", array_length(ptr), len);
-    ASSERT_EQm("Mismatching compound type sizes.", array_type_size(ptr), size);
-    ASSERT_EQm("Mismatching array sizes.", array_size(ptr), size*len);
+    ASSERT_EQm("Mismatching compound type sizes.", array_type_size(ptr), element_size);
+    ASSERT_EQm("Mismatching array sizes.", array_size(ptr), element_size*len);
     PASS();
 }
 
