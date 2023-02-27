@@ -3,11 +3,16 @@
 
 //#define SMALLOC_FIXED_ALLOCATOR
 //#define MY_LIBCSPTR_IMPLEMENTATION
-#include "csptr.h"
+#include "../csptr.h"
 
 
-TEST zero_size(void) {
+TEST zero_size_for_unique(void) {
     void *ptr = smalloc(0, 0, UNIQUE);
+    ASSERT_EQ(NULL, ptr);
+    PASS();
+}
+TEST zero_size_for_shared(void) {
+    void *ptr = smalloc(0, 0, SHARED);
     ASSERT_EQ(NULL, ptr);
     PASS();
 }
@@ -26,7 +31,8 @@ TEST alloc_failure(void) {
 #endif
 
 GREATEST_SUITE(misc_suite) {
-    RUN_TEST(zero_size);
+    RUN_TEST(zero_size_for_unique);
+    RUN_TEST(zero_size_for_shared);
 #ifndef SMALLOC_FIXED_ALLOCATOR
     RUN_TEST(alloc_failure);
 #endif

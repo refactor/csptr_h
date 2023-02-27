@@ -19,16 +19,16 @@ assert_valid_ptr(void* ptr) {
 
 //*
 
-struct meta {
+struct my_userdata {
     int i;
     long l;
     double d;
 };
 
-extern const struct meta m;
+extern const struct my_userdata g_metadata;
 
 static enum greatest_test_res
-assert_valid_meta(const struct meta *m1, const struct meta *m2) {
+assert_valid_meta(const struct my_userdata *m1, const struct my_userdata *m2) {
     ASSERT_NEQm("Expected metadata to be present", NULL, m2);
     ASSERT_NEQm("Expected metadata to be copied", m1, m2);
     const int intact = m1->i == m2->i
@@ -39,7 +39,6 @@ assert_valid_meta(const struct meta *m1, const struct meta *m2) {
 }
 
 // */
-
 #define lambda(RType, Body) ({ RType __fn__ Body; __fn__; })
 #define UNUSED __attribute__ ((unused))
 

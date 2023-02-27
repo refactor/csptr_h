@@ -79,12 +79,13 @@ TEST array_dtor_run(void) {
 }
 
 TEST array_meta(void) {
-    smart anim *arr = unique_arr(anim, LEN(as), as, .meta= { &m, sizeof(m) });
+    smart anim *arr = unique_arr(anim, LEN(as), as, .meta= { &g_metadata, sizeof(g_metadata) });
     ASSERT_EQ(LEN(as), array_length(arr));
     CHECK_CALL(assert_eq_array(as, arr, LEN(as)));
 
     CHECK_CALL(assert_valid_array(arr, LEN(as), sizeof(struct anim)));
- //   CHECK_CALL(assert_valid_meta(&m, array_user_meta(arr)));
+    CHECK_CALL(assert_valid_meta(&g_metadata, array_user_meta(arr)));
+    ASSERT_NEQ(&g_metadata, array_user_meta(arr));
     PASS();
 }
 
@@ -92,19 +93,20 @@ TEST array_dtor_run_with_meta(void) {
     int dtor_run = 0;
     f_destructor dtor = lambda(void, (void *ptr, void *meta) {
             anim* a = (anim*)ptr;
-            struct meta* pm = (struct meta*)meta;
+            struct my_userdata* pm = (struct my_userdata*)meta;
  //           struct meta* pm = (struct meta*)array_user_meta(meta);
             printf("\tdtor -> name: %s, age: %d, weight: %f; meta: i=%d,l=%ld,d=%f\n", a->name, a->age, a->weight,pm->i,pm->l,pm->d);
             dtor_run = 1;
         });
  
-    printf("meta: i=%d, l=%ld, d=%f\n", m.i,m.l,m.d);
-    anim *arr = unique_arr(anim, LEN(as), as, dtor, { &m, sizeof(m) });
+    printf("meta: i=%d, l=%ld, d=%f\n", g_metadata.i, g_metadata.l, g_metadata.d);
+    anim *arr = unique_arr(anim, LEN(as), as, dtor, { &g_metadata, sizeof(g_metadata) });
     ASSERT_EQ(LEN(as), array_length(arr));
     CHECK_CALL(assert_eq_array(as, arr, LEN(as)));
 
     CHECK_CALL(assert_valid_array(arr, LEN(as), sizeof(struct anim)));
-//    CHECK_CALL(assert_valid_meta(&m, array_user_meta(arr)));
+    CHECK_CALL(assert_valid_meta(&g_metadata, array_user_meta(arr)));
+    ASSERT_NEQ(&g_metadata, array_user_meta(arr));
 
     sfree(arr);
     ASSERT_EQm("Expected destructor to run", 1, dtor_run);
@@ -112,7 +114,7 @@ TEST array_dtor_run_with_meta(void) {
 }
 
 
-GREATEST_SUITE(array2_suite) {
+GREATEST_SUITE(struct_array_suite) {
     RUN_TEST(uninit_array);
     RUN_TEST(array);
     RUN_TEST(array_dtor_run);

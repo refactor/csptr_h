@@ -1,11 +1,20 @@
 .PHONY: test clean
 
-%.o: utest/%.c
-	gcc -g -O0 -std=c11 -Wall -Wextra -Wno-missing-braces -Wno-unused-function -Iutest -I. -c $<
+TEST_SRC=$(wildcard utest/*.c)
+TEST_OBJ=${TEST_SRC:.c=.o}
 
-test: misc.o scalar.o shared.o array.o test.o array2.o
-	gcc -g -O0 -o $@ $^
+CFLAGS=-g -std=c11 -Wall -Wextra -Wno-missing-braces -Wno-unused-function -Iutest -I.
+%.o: utest/%.c
+	$(CC) $(CFLAGS) -c $<
+
+all: demo
+	$(CC) $(CFLAGS) -o demo demo.c
+	-@./demo
+
+
+test: ${TEST_OBJ}
+	gcc -o $@ $^
 	-@./test
 
 clean:
-	-@rm ./*.o ./test ./a.out 2> /dev/null ||true
+	-@rm ./*.o ./test ./a.out ./demo ${TEST_OBJ} 2> /dev/null ||true
