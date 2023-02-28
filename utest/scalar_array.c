@@ -40,8 +40,8 @@ TEST array_cloned(void) {
 }
 
 TEST array_with_dtor(void) {
-    int sum = 0;
-    size_t dtor_run = 0;
+    volatile int sum = 0;
+    volatile size_t dtor_run = 0;
     f_destructor arrary_element_dtor = lambda(void, (void *ptr, void *meta) {
         (void) meta;
         int* elem = (int*)ptr;
@@ -52,7 +52,7 @@ TEST array_with_dtor(void) {
         ++dtor_run;
     });
     int va[] = {5, 4, 3, 2, 1};
-    size_t arr_len = sizeof(va)/sizeof(va[0]);
+    const size_t arr_len = sizeof(va)/sizeof(va[0]);
     int *ints = shared_arr(int, arr_len, va, arrary_element_dtor);
     CHECK_CALL(assert_valid_array(ints, arr_len, sizeof(int)));
     CHECK_CALL(assert_eq_array(va, ints, arr_len));
@@ -73,22 +73,59 @@ TEST array_meta(void) {
     PASS();
 }
 
-TEST array_dtor_run_with_meta(void) {
+TEST unique_array_uninit_dtor_run_with_meta(void) {
     int dtor_run = 0;
-    f_destructor dtor = lambda(void, (UNUSED void *ptr, UNUSED void *meta) { dtor_run = 1; });
+    size_t sum = 0;
+    f_destructor dtor = lambda(void, (void *ptr, void *meta) {
+        struct my_userdata* m = meta;
+        assert_valid_meta_with_ASSERT_OR_LONGJMP(&g_metadata, m);
+        sum += *(int*)ptr;
+        dtor_run++;
+    });
 
     int *arr = unique_arr(int, ARRAY_SIZE, .dtor=dtor, .meta={ &g_metadata, sizeof(g_metadata) });
     CHECK_CALL(assert_valid_array(arr, ARRAY_SIZE, sizeof(int)));
     CHECK_CALL(assert_valid_meta(&g_metadata, array_user_meta(arr)));
 
     sfree(arr);
-    ASSERT_EQm("Expected destructor to run", 1, dtor_run);
+    ASSERT_EQm("Expected uninit-array set 0", 0, sum);
+    ASSERT_EQm("Expected destructor to run", ARRAY_SIZE, dtor_run);
     PASS();
 }
 
-TEST shared_array_dtor_run_with_meta(void) {
-    int dtor_run = 0;
-    f_destructor dtor = lambda(void, (UNUSED void *ptr, UNUSED void *meta) { dtor_run = 1; });
+TEST unique_array_init_dtor_run_with_meta(void) {
+    size_t dtor_run = 0;
+    int sum = 0;
+    f_destructor dtor = lambda(void, (void *ptr, void *meta) {
+        struct my_userdata* m = meta;
+        assert_valid_meta_with_ASSERT_OR_LONGJMP(&g_metadata, m);
+        sum += *(int*)ptr;
+        dtor_run++;
+    });
+
+    int ARR[] = {1, 3, 5, 7, 9, 11};
+    const size_t LEN = sizeof(ARR)/sizeof(ARR[0]);
+    int *arr = unique_arr(int, LEN, ARR, .dtor=dtor, .meta={ &g_metadata, sizeof(g_metadata) });
+    CHECK_CALL(assert_valid_array(arr, LEN, sizeof(int)));
+    CHECK_CALL(assert_valid_meta(&g_metadata, array_user_meta(arr)));
+
+    sfree(arr);
+    int s = 0;
+    for (size_t i = 0; i < LEN; ++i) s += ARR[i];
+    ASSERT_EQm("Expected array sum", s, sum);
+    ASSERT_EQm("Expected destructor to run", LEN, dtor_run);
+    PASS();
+}
+
+TEST shared_array_uninit_dtor_run_with_meta(void) {
+    size_t dtor_run = 0;
+    int sum = 0;
+    f_destructor dtor = lambda(void, (void *ptr, void *meta) {
+        struct my_userdata* m = meta;
+        assert_valid_meta_with_ASSERT_OR_LONGJMP(&g_metadata, m);
+        sum += *(int*)ptr;
+        dtor_run++;
+    });
 
     int *arr = shared_arr(int, ARRAY_SIZE, .dtor=dtor, .meta={ &g_metadata, sizeof(g_metadata) });
     CHECK_CALL(assert_valid_array(arr, ARRAY_SIZE, sizeof(int)));
@@ -102,9 +139,41 @@ TEST shared_array_dtor_run_with_meta(void) {
     }
     ASSERT_EQ(0, dtor_run);
     sfree(arr);
-    ASSERT_EQm("Expected destructor to run", 1, dtor_run);
+    ASSERT_EQm("Expected array sum", 0, sum);
+    ASSERT_EQm("Expected destructor to run", ARRAY_SIZE, dtor_run);
     PASS();
 }
+TEST shared_array_init_dtor_run_with_meta(void) {
+    size_t dtor_run = 0;
+    int sum = 0;
+    f_destructor dtor = lambda(void, (void *ptr, void *meta) {
+        struct my_userdata* m = meta;
+        assert_valid_meta_with_ASSERT_OR_LONGJMP(&g_metadata, m);
+        sum += *(int*)ptr;
+        dtor_run++;
+    });
+
+    int ARR[] = {1, 3, 5, 7, 9, 11};
+    const size_t LEN = sizeof(ARR)/sizeof(ARR[0]);
+    int *arr = shared_arr(int, LEN, ARR, .dtor=dtor, .meta={ &g_metadata, sizeof(g_metadata) });
+    CHECK_CALL(assert_valid_array(arr, LEN, sizeof(int)));
+    CHECK_CALL(assert_valid_meta(&g_metadata, array_user_meta(arr)));
+
+    {
+        autoclean int* ptr = sref(arr);
+        CHECK_CALL(assert_valid_array(ptr, LEN, sizeof(int)));
+        CHECK_CALL(assert_valid_meta(&g_metadata, array_user_meta(ptr)));
+        ASSERT_EQ(0, dtor_run);
+    }
+    ASSERT_EQ(0, dtor_run);
+    sfree(arr);
+    int s = 0;
+    for (size_t i = 0; i < LEN; ++i) s += ARR[i];
+    ASSERT_EQm("Expected array sum", s, sum);
+    ASSERT_EQm("Expected destructor to run", LEN, dtor_run);
+    PASS();
+}
+
 
 
 GREATEST_SUITE(scalar_array_suite) {
@@ -113,7 +182,9 @@ GREATEST_SUITE(scalar_array_suite) {
     RUN_TEST(array_cloned);
     RUN_TEST(array_with_dtor);
     RUN_TEST(array_meta);
-    RUN_TEST(array_dtor_run_with_meta);
-    RUN_TEST(shared_array_dtor_run_with_meta);
+    RUN_TEST(unique_array_uninit_dtor_run_with_meta);
+    RUN_TEST(unique_array_init_dtor_run_with_meta);
+    RUN_TEST(shared_array_uninit_dtor_run_with_meta);
+    RUN_TEST(shared_array_init_dtor_run_with_meta);
 }
 

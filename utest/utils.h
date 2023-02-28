@@ -1,5 +1,6 @@
 #pragma once
 
+#define GREATEST_USE_LONGJMP 1
 #include "greatest.h"
 #include <inttypes.h>
 #include <stdbool.h>
@@ -35,6 +36,17 @@ assert_valid_meta(const struct my_userdata *m1, const struct my_userdata *m2) {
         && m1->l == m2->l
         && m1->d == m2->d;
     ASSERT_EQm("Expected metadata to be intact.", true, intact);
+    PASS();
+}
+
+static enum greatest_test_res
+assert_valid_meta_with_ASSERT_OR_LONGJMP(const struct my_userdata *m1, const struct my_userdata *m2) {
+    ASSERT_OR_LONGJMPm("Expected usermeta to be present", NULL != m2);
+    ASSERT_OR_LONGJMPm("Expected usermeta to be copied", m1 != m2);
+    const int intact = m1->i == m2->i
+        && m1->l == m2->l
+        && m1->d == m2->d;
+    ASSERT_OR_LONGJMPm("Expected usermeta to be intact.", intact);
     PASS();
 }
 

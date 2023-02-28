@@ -1,5 +1,3 @@
-#include "greatest.h"
-
 #define MY_LIBCSPTR_IMPLEMENTATION
 #include "../csptr.h"
 
