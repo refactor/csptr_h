@@ -1,5 +1,5 @@
 #include "utils.h"
-#include "csptr.h"
+#include "../csptr.h"
 
 #define ARRAY_SIZE 25
 
@@ -62,10 +62,8 @@ TEST array(void) {
 
 TEST array_dtor_run(void) {
     int dtor_run = 0;
-    f_destructor dtor = lambda(void, (void *ptr, UNUSED void *meta) {
-            anim* a = (anim*)ptr;
-            printf("\tdtor -> name: %s, age: %d, weight: %f\n", a->name, a->age, a->weight);
-            //ASSERT_EQ(arr + dtor_run, ptr);
+    f_destructor dtor = lambda(void, (UNUSED void *ptr,  void *userdata) {
+            ASSERT_OR_LONGJMPm("Expected usermeta to be copied", NULL == userdata);
             dtor_run++;
         });
     anim *arr = unique_arr(anim, LEN(as), as, dtor);
@@ -91,15 +89,12 @@ TEST array_meta(void) {
 
 TEST array_dtor_run_with_meta(void) {
     int dtor_run = 0;
-    f_destructor dtor = lambda(void, (void *ptr, void *meta) {
-            anim* a = (anim*)ptr;
-            struct my_userdata* pm = (struct my_userdata*)meta;
- //           struct meta* pm = (struct meta*)array_userdata(meta);
-            printf("\tdtor -> name: %s, age: %d, weight: %f; meta: i=%d,l=%ld,d=%f\n", a->name, a->age, a->weight,pm->i,pm->l,pm->d);
-            dtor_run = 1;
+    f_destructor dtor = lambda(void, (UNUSED void *ptr, void *userdata) {
+            struct my_userdata* pm = (struct my_userdata*)userdata;
+            assert_valid_meta_with_ASSERT_OR_LONGJMP(&g_metadata, pm);
+            dtor_run++;
         });
  
-    printf("meta: i=%d, l=%ld, d=%f\n", g_metadata.i, g_metadata.l, g_metadata.d);
     anim *arr = unique_arr(anim, LEN(as), as, dtor, { &g_metadata, sizeof(g_metadata) });
     ASSERT_EQ(LEN(as), array_length(arr));
     CHECK_CALL(assert_eq_array(as, arr, LEN(as)));
@@ -109,7 +104,7 @@ TEST array_dtor_run_with_meta(void) {
     ASSERT_NEQ(&g_metadata, array_userdata(arr));
 
     sfree(arr);
-    ASSERT_EQm("Expected destructor to run", 1, dtor_run);
+    ASSERT_EQm("Expected destructor to run", LEN(as), dtor_run);
     PASS();
 }
 

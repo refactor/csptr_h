@@ -5,6 +5,7 @@
 typedef struct dog {
     const char* name;
     int age;
+    int weight;
 } dog;
 
 TEST shared_uninit(void) {
@@ -16,11 +17,30 @@ TEST shared_uninit(void) {
     PASS();
 }
 
+TEST unique_uninit(void) {
+    smart dog *ptr = unique_ptr(dog);
+    CHECK_CALL(assert_valid_ptr(ptr));
+    ASSERT_EQ(NULL, ptr->name);
+    ASSERT_EQ(0, ptr->age);
+    ASSERT_EQm("Expected pointer to have no usermeta", NULL, get_smart_ptr_userdata(ptr));
+    PASS();
+}
+
 static int dead_dog_count = 0;
 void tombed_dog(void* ptr, UNUSED void* meta) {
     dog* d = (dog*)ptr;
-    printf("RIP dog: name=%s, age=%d\n", d->name, d->age);
+    ASSERT_OR_LONGJMPm("Expected unset struct.member will be init to ZERO", 0 == d->weight);
     ++dead_dog_count;
+}
+
+TEST unique_init_dog(void) {
+    const char *name = "Tom";
+    autoclean dog *ptr = shared_ptr(dog, {.name=name, .age=7}, tombed_dog);
+    CHECK_CALL(assert_valid_ptr(ptr));
+    ASSERT_EQ(name, ptr->name);
+    ASSERT_EQ(7, ptr->age);
+    ASSERT_EQm("Expected pointer to have no usermeta", NULL, get_smart_ptr_userdata(ptr));
+    PASS();
 }
 
 TEST shared_init_dog(void) {
@@ -28,30 +48,27 @@ TEST shared_init_dog(void) {
     dog *ptr;
     {
         const char *name = "Tom";
-        smart dog *ptr1 = shared_ptr(dog, {.name=name}, tombed_dog);
+        smart dog *ptr1 = shared_ptr(dog, {.name=name, .age=7}, tombed_dog);
         CHECK_CALL(assert_valid_ptr(ptr1));
         ASSERT_EQ(name, ptr1->name);
-        ASSERT_EQ(0, ptr1->age);
+        ASSERT_EQ(7, ptr1->age);
         ptr = sref(ptr1);
     }
     ASSERT_EQm("expected dead dog is 0", 0, dead_dog_count);
 
-    //*
     {
         const char *name = "tommason";
-        smart dog *ptr2 = shared_ptr(dog, name,10, tombed_dog);
+        smart dog *ptr2 = shared_ptr(dog, {name,10}, tombed_dog);
         CHECK_CALL(assert_valid_ptr(ptr2));
         ASSERT_EQ(name, ptr2->name);
         ASSERT_EQ_FMT(10, ptr2->age, "%d");
 
         ASSERT_EQm("expected dead dog is 0", 0, dead_dog_count);
-        // sfree(ptr);
     }
-    ASSERT_EQm("expected dead dog is 1", 1, dead_dog_count);
+    ASSERT_EQ_FMTm("expected dead dog is 1", 1, dead_dog_count, "%d");
 
     sfree(ptr);
     ASSERT_EQm("expected dead dog is 2", 2, dead_dog_count);
-   // */
     PASS();
 }
 
@@ -71,14 +88,13 @@ TEST shared_sref(void) {
     ASSERT_EQm("Expected destructor NOT to have run.", 0, dtor_run);
     sfree(ptr);
     ASSERT_EQm("Expected destructor have run.", 1, dtor_run);
-
     PASS();
 }
 
 TEST unique_sref(void) {
     int dtor_run = 0;
     f_destructor dtor = lambda(void, (UNUSED void *ptr, UNUSED void *userdata) { dtor_run = 1; });
-    smart dog *ptr = unique_ptr(dog, { .name="Tom", .age=42 }, dtor);
+    dog *ptr = unique_ptr(dog, { .name="Tom", .age=42 }, dtor);
     CHECK_CALL(assert_valid_ptr(ptr) );
     ASSERT_EQ("Tom", ptr->name);
     ASSERT_EQ(42, ptr->age);
@@ -87,11 +103,13 @@ TEST unique_sref(void) {
         ASSERT_EQ("Tom", ptr2->name);
         ASSERT_EQ(42, ptr2->age);
     }
-//    sfree(ptr);
     ASSERT_EQ(0, dtor_run);
+    sfree(ptr);
+    ASSERT_EQ(1, dtor_run);
     PASS();
 }
-TEST shared_dog_with_usermeta(void) {
+
+TEST shared_dog_with_userdata(void) {
     struct owner {
         const char* master;
         int lost_dog_num;
@@ -104,9 +122,11 @@ TEST shared_dog_with_usermeta(void) {
     {
         f_destructor dtor = lambda(void, (void *ptr, void *userdata) {
             dog* a = (dog*)ptr;
-            struct owner* pm = (struct owner*)userdata;
+            ASSERT_OR_LONGJMPm("Expected unset struct.member will be init to ZERO", 0 == a->weight);
+
+                struct owner* pm = (struct owner*)userdata;
  //           struct meta* pm = (struct meta*)array_userdata(meta);
-            printf("\tdtor -> dog: name=%s, age=%d ; owner: %s, lost_dog_num=%d\n", a->name, a->age,  pm->master,pm->lost_dog_num);
+            if (dtor_run == 0) dtor_run = pm->lost_dog_num;
             dtor_run++;
         });
         const char* name = "Tommason";
@@ -119,15 +139,17 @@ TEST shared_dog_with_usermeta(void) {
     }
     ASSERT_EQ(0, dtor_run);
     sfree(ptr);
-    ASSERT_EQ(1, dtor_run);
+    ASSERT_EQ(um.lost_dog_num + 1, dtor_run);
     PASS();
 }
 
-GREATEST_SUITE(shared_suite) {
+GREATEST_SUITE(struct_scalar) {
     RUN_TEST(shared_uninit);
+    RUN_TEST(unique_uninit);
+    RUN_TEST(unique_init_dog);
     RUN_TEST(shared_init_dog);
     RUN_TEST(shared_sref);
-    RUN_TEST(shared_dog_with_usermeta);
+    RUN_TEST(shared_dog_with_userdata);
     RUN_TEST(unique_sref);
 }
 

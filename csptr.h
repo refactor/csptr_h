@@ -1,7 +1,7 @@
-//
-// Created by wulei on 2022/2/25.
-//
-
+/* csptr.h - v0.1.0 - public domain structures for autoclean/smart pointer -
+    Created by wulei on 2022/2/25.
+    Inspired by https://snai.pe/posts/c-smart-pointers
+*/
 #ifndef MY_LIBCSPTR_H
 #define MY_LIBCSPTR_H
 
@@ -37,10 +37,10 @@
 # endif
 
 enum pointer_kind {
-    UNIQUE,
-    SHARED,
+    UNIQUE = 1,
+    SHARED = 2,
 
-    ARRAY = 1 << 8
+    ARRAY = 4
 };
 
 typedef void (*f_destructor)(void *, void *);
@@ -64,10 +64,10 @@ typedef struct {
     } userdata;
 } s_smalloc_args;
 
-CSPTR_PURE void *get_smart_ptr_userdata(const void * const ptr);
+CSPTR_PURE void *get_smart_ptr_userdata(const void * const smart_ptr);
 void *sref(void *ptr);
 CSPTR_MALLOC_API void *smalloc_(s_smalloc_args *args);
-void sfree(void *ptr);
+void sfree(void *smart_ptr);
 void *smove_size(void *ptr, size_t size);
 
 #  define smalloc(...) \
@@ -168,27 +168,25 @@ CSPTR_PURE void *array_userdata(void *ptr);
 
 
 CSPTR_PURE
-static s_meta_array *get_smart_ptr_meta_array_(const void * const ptr) {
-    return get_smart_ptr_userdata(ptr); // TODO: s_meta_array should not in userdata area
-}
+static s_meta_array *get_smart_ptr_meta_array_(const void * const smart_ptr);
 
-CSPTR_PURE size_t array_length(const void *ptr) {
-    s_meta_array *meta = get_smart_ptr_meta_array_(ptr);
+CSPTR_PURE size_t array_length(const void *smart_ptr) {
+    s_meta_array *meta = get_smart_ptr_meta_array_(smart_ptr);
     return meta ? meta->itemnum : 1;  // TODO: instead of 1, it should be real array length
 }
 
-CSPTR_PURE size_t array_item_size(const void *ptr) {
-    s_meta_array *meta = get_smart_ptr_meta_array_(ptr);
+CSPTR_PURE size_t array_item_size(const void *smart_ptr) {
+    s_meta_array *meta = get_smart_ptr_meta_array_(smart_ptr);
     return meta ? meta->itemsize : 0;
 }
 
-CSPTR_PURE size_t array_size(const void *ptr) {
-    s_meta_array *meta = get_smart_ptr_meta_array_(ptr);
+CSPTR_PURE size_t array_size(const void *smart_ptr) {
+    s_meta_array *meta = get_smart_ptr_meta_array_(smart_ptr);
     return meta ? meta->itemsize * meta->itemnum : 0;
 }
 
-CSPTR_PURE CSPTR_INLINE void *array_userdata(void *ptr) {
-    s_meta_array *meta = get_smart_ptr_meta_array_(ptr);
+CSPTR_PURE CSPTR_INLINE void *array_userdata(void *smart_ptr) {
+    s_meta_array *meta = get_smart_ptr_meta_array_(smart_ptr);
     return meta ? meta + 1 : NULL;
 }
 
@@ -212,11 +210,6 @@ typedef struct {
 
 static CSPTR_INLINE size_t align(size_t s) {
     return (s + (sizeof (char *) - 1)) & ~(sizeof (char *) - 1);
-}
-
-static CSPTR_PURE CSPTR_INLINE s_meta *get_meta_(const void * const ptr) {
-    size_t *size = (size_t *) ptr - 1;
-    return (s_meta *) ((char *) size - *size);
 }
 
 s_allocator smalloc_allocator = {malloc, free};
@@ -255,22 +248,13 @@ static CSPTR_INLINE size_t atomic_decrement(volatile size_t *count) {
 #endif
 }
 
-CSPTR_INLINE void *get_smart_ptr_userdata(const void * const ptr) {
-    assert((size_t) ptr == align((size_t) ptr));
-
-    s_meta * const meta = get_meta_(ptr);
-    assert(meta->ptr == ptr);
-
-    size_t head_size = meta->kind & SHARED ? sizeof (s_meta_shared) : sizeof (s_meta);
-    size_t *metasize = (size_t *) ptr - 1;
-    if (*metasize == head_size)
-        return NULL;
-
-    return (char *) meta + head_size;
+static CSPTR_PURE CSPTR_INLINE s_meta *get_smart_ptr_meta_(const void * const smart_ptr) {
+    size_t *sz_ptr = (size_t *) smart_ptr - 1;
+    return (s_meta *) ((char *) sz_ptr - *sz_ptr);
 }
 
 void *sref(void *ptr) {
-    s_meta *meta = get_meta_(ptr);
+    s_meta *meta = get_smart_ptr_meta_(ptr);
     assert(meta->ptr == ptr);
     assert(meta->kind & SHARED);
     atomic_increment(&((s_meta_shared *) meta)->ref_count);
@@ -278,7 +262,7 @@ void *sref(void *ptr) {
 }
 
 void *smove_size(void *ptr, size_t size) {
-    s_meta *meta = get_meta_(ptr);
+    s_meta *meta = get_smart_ptr_meta_(ptr);
     assert(meta->kind & UNIQUE);
 
     s_smalloc_args args;
@@ -320,11 +304,11 @@ CSPTR_INLINE static void *alloc_entry(size_t head, size_t size, size_t metasize)
 
 CSPTR_INLINE static void dealloc_entry(s_meta *meta, void *ptr) {
     if (meta->dtor) {
-        void *userdata = get_smart_ptr_userdata(ptr);
+        void * const userdata = get_smart_ptr_userdata(ptr);
         if (meta->kind & ARRAY) {
-            s_meta_array *arr_meta = userdata;//(void *) (meta + 1);
+            s_meta_array *arr_meta = get_smart_ptr_meta_array_(ptr);//(void *) (meta + 1);
             for (size_t i = 0; i < arr_meta->itemnum; ++i)
-                meta->dtor((char *) ptr + arr_meta->itemsize * i, arr_meta + 1);
+                meta->dtor((char *) ptr + arr_meta->itemsize * i, userdata);
         }
         else
             meta->dtor(ptr, userdata);
@@ -337,83 +321,109 @@ CSPTR_INLINE static void dealloc_entry(s_meta *meta, void *ptr) {
 #endif /* !SMALLOC_FIXED_ALLOCATOR */
 }
 
+static inline size_t get_meta_header_size_(enum pointer_kind kind) {
+    return kind & SHARED ? sizeof (s_meta_shared) : sizeof (s_meta);
+}
+static inline size_t get_meta_array_size_(enum pointer_kind kind) {
+    return kind & ARRAY ? sizeof(s_meta_array) : 0;
+}
+static inline size_t get_meta_size_(enum pointer_kind kind) {
+    return get_meta_header_size_(kind) + get_meta_array_size_(kind);
+}
+static inline s_meta_array* get_ptr_meta_array_(const void* raw_ptr, enum pointer_kind kind) {
+    return (s_meta_array*) ((char*)raw_ptr + get_meta_header_size_(kind));
+}
+static inline char* get_ptr_userdata_(const void* raw_ptr, enum pointer_kind kind) {
+    return (char *) raw_ptr + get_meta_size_(kind);
+}
 CSPTR_MALLOC_API
 static void *smalloc_impl_(const s_smalloc_args *args) {
     if (!(args->item_size && args->item_num))
         return NULL;
 
     // align the sizes to the item_size of a word
-    size_t aligned_metasize = align(args->userdata.size);
+    size_t aligned_userdata_size = align(args->userdata.size);
     size_t rowdata_size = align(args->item_size * args->item_num);
 
-    size_t head_size = args->kind & SHARED ? sizeof (s_meta_shared) : sizeof (s_meta);
-    void *ptr = alloc_entry(head_size, rowdata_size, aligned_metasize);
-    if (ptr == NULL)
+    const size_t total_meta_size = get_meta_size_(args->kind);
+
+    void *raw_ptr = alloc_entry(total_meta_size, rowdata_size, aligned_userdata_size);
+    if (raw_ptr == NULL)
         return NULL;
 
-    char *shifted = (char *) ptr + head_size;
+    char * const userdata_ptr = get_ptr_userdata_(raw_ptr, args->kind);
     if (args->userdata.size && args->userdata.data)
-        memcpy(shifted, args->userdata.data, args->userdata.size);
+        memcpy(userdata_ptr, args->userdata.data, args->userdata.size);
 
-    size_t *sz = (size_t *) (shifted + aligned_metasize);
-    *sz = head_size + aligned_metasize;
+    if (args->kind & ARRAY) {
+        s_meta_array *meta_array = get_ptr_meta_array_(raw_ptr, args->kind);
+        *meta_array = (s_meta_array) {
+                .itemnum = args->item_num,
+                .itemsize = args->item_size
+        };
+    }
 
-    *(s_meta*) ptr = (s_meta) {
+    size_t * const sz_ptr = (size_t *) (userdata_ptr + aligned_userdata_size);
+    *sz_ptr = total_meta_size + aligned_userdata_size;
+
+    *(s_meta*) raw_ptr = (s_meta) {
         .kind = args->kind,
         .dtor = args->dtor,
 #ifndef NDEBUG
-        .ptr = sz + 1
+        .ptr = sz_ptr + 1
 #endif
     };
 
     if (args->kind & SHARED)
-        ((s_meta_shared*) ptr)->ref_count = 1;
+        ((s_meta_shared*) raw_ptr)->ref_count = 1;
 
-    return sz + 1;
+    return sz_ptr + 1;
 }
 
-CSPTR_MALLOC_API
-static void *smalloc_array_(const s_smalloc_args *args) {
-    const size_t aligned_metasize = align(args->userdata.size + sizeof(s_meta_array));
-#ifdef _MSC_VER
-    char *new_meta = _alloca(aligned_metasize);
-#else
-    char new_meta[aligned_metasize];
-#endif
-    s_meta_array *arr_meta = (void *) new_meta;
-    *arr_meta = (s_meta_array) {
-        .itemsize = args->item_size,
-        .itemnum = args->item_num,
-    };
-    if (args->userdata.size && args->userdata.data)
-        memcpy(arr_meta + 1, args->userdata.data, args->userdata.size);
+static s_meta_array *get_smart_ptr_meta_array_(const void * const smart_ptr) {
+    assert((size_t) smart_ptr == align((size_t) smart_ptr));
 
-    return smalloc_impl_(&(s_smalloc_args) {
-            .item_size = args->item_size,
-            .item_num = args->item_num,
-            .kind = (enum pointer_kind) (args->kind | ARRAY),
-            .dtor = args->dtor,
-            .userdata = {&new_meta, aligned_metasize},
-    });
+    s_meta * const raw_ptr = get_smart_ptr_meta_(smart_ptr);
+    assert(raw_ptr->ptr == smart_ptr);
+    if (!(raw_ptr->kind & ARRAY) ){
+        return NULL;
+    }
+    size_t header_size = get_meta_header_size_(raw_ptr->kind);
+    s_meta_array* ma = (s_meta_array *)(((char*)raw_ptr) + header_size);
+    return ma;
+}
+
+CSPTR_INLINE
+void *get_smart_ptr_userdata(const void * const smart_ptr) {
+    assert((size_t) smart_ptr == align((size_t) smart_ptr));
+
+    s_meta * const raw_ptr = get_smart_ptr_meta_(smart_ptr);
+    assert(raw_ptr->ptr == smart_ptr);
+
+    size_t header_size = get_meta_size_(raw_ptr->kind);
+    size_t *total_meta_size = (size_t *) smart_ptr - 1;
+    if (*total_meta_size == header_size)
+        return NULL;
+
+    return (char *) raw_ptr + header_size;
 }
 
 CSPTR_MALLOC_API
 void *smalloc_(s_smalloc_args *args) {
-//    return (args->item_num == 0 ? smalloc_impl_ : smalloc_array_)(args);
-    return (args->kind & ARRAY ? smalloc_array_ : smalloc_impl_)(args);
+    return smalloc_impl_(args);
 }
 
-void sfree(void *ptr) {
-    if (!ptr) return;
+void sfree(void *smart_ptr) {
+    if (!smart_ptr) return;
 
-    assert((size_t) ptr == align((size_t) ptr));
-    s_meta *meta = get_meta_(ptr);
-    assert(meta->ptr == ptr);
+    assert((size_t) smart_ptr == align((size_t) smart_ptr));
+    s_meta *meta = get_smart_ptr_meta_(smart_ptr);
+    assert(meta->ptr == smart_ptr);
 
     if (meta->kind & SHARED && atomic_decrement(&((s_meta_shared *) meta)->ref_count))
         return;
 
-    dealloc_entry(meta, ptr);
+    dealloc_entry(meta, smart_ptr);
 }
 
 #endif

@@ -19,7 +19,7 @@ assert_eq_array(int *arr1, int *arr2, size_t len) {
     PASS();
 }
 
-TEST weird_array(void) {
+TEST weird_point(void) {
     typedef int(static_int)[25];
     smart static_int *arr = unique_ptr(static_int);
     ASSERT_EQ_FMTm("Mismatching array lengths.", (size_t)1, array_length(arr), "%zu");
@@ -38,18 +38,18 @@ TEST array_cloned(void) {
     smart int *arr = shared_arr(int, 7, va);//(int[7]){1,2,3,4,5,6,7});
     CHECK_CALL(assert_valid_array(arr, 7, sizeof(int)));
     CHECK_CALL(assert_eq_array(va, arr, 7));
+    ASSERT_EQ(NULL, get_smart_ptr_userdata(arr));
     PASS();
 }
 
 TEST array_with_dtor(void) {
     volatile int sum = 0;
     volatile size_t dtor_run = 0;
-    f_destructor arrary_element_dtor = lambda(void, (void *ptr, void *meta) {
-        (void) meta;
+    f_destructor arrary_element_dtor = lambda(void, (void *ptr, void *userdata) {
+        // userdata points to the array userdata (global to the array), if any.
+        ASSERT_OR_LONGJMPm("Expected usermeta to be copied", NULL == userdata);
         int* elem = (int*)ptr;
         // ptr points to the current element
-        // meta points to the array metadata (global to the array), if any.
-        printf("array-element-dtor(%p) = %d\n", ptr, *elem);
         sum += *elem;
         ++dtor_run;
     });
@@ -138,6 +138,7 @@ TEST shared_array_uninit_dtor_run_with_meta(void) {
     ASSERT_EQm("Expected destructor to run", ARRAY_SIZE, dtor_run);
     PASS();
 }
+
 TEST shared_array_init_dtor_run_with_meta(void) {
     size_t dtor_run = 0;
     int sum = 0;
@@ -164,23 +165,19 @@ TEST shared_array_init_dtor_run_with_meta(void) {
     sfree(arr);
     int s = 0;
     for (size_t i = 0; i < LEN; ++i) s += ARR[i];
-    ASSERT_EQm("Expected array sum", s, sum);
-    ASSERT_EQm("Expected destructor to run", LEN, dtor_run);
+    ASSERT_EQm("Expected array-item-destructor to run, by sum array", s, sum);
+    ASSERT_EQm("Expected array-item-destructor to run", LEN, dtor_run);
     PASS();
 }
 
 TEST zero_array(void) {
-    const size_t LEN = 0;
     smart int *arr = shared_arr(int, 0);
     ASSERT_EQm("Expected NULL for zero-array", NULL, arr);
-//    printf("+++++++++= arr.len=%zu\n", array_length(arr));
-//    printf("+++++++++= elem.sz=%zu\n", array_item_size(arr));
-//    CHECK_CALL(assert_valid_array(arr, LEN, sizeof(int)));
     PASS();
 }
 
 GREATEST_SUITE(scalar_array_suite) {
-    RUN_TEST(weird_array);
+    RUN_TEST(weird_point);
     RUN_TEST(array_uninit);
     RUN_TEST(array_cloned);
     RUN_TEST(array_with_dtor);
