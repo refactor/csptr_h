@@ -106,16 +106,17 @@ CSPTR_INLINE void sfree_stack(void *ptr) {
         };                                                                  \
         const __typeof__(Type[1]) dummy;                                    \
         void *var = sizeof (dummy[0]) == sizeof (dummy)                     \
-            ? smalloc(sizeof (Type), 0, Kind, ARGS_)                        \
+            ? smalloc(sizeof (Type), 1, Kind, ARGS_)                        \
             : smalloc(sizeof (dummy[0]),                                    \
                     sizeof (dummy) / sizeof (dummy[0]), Kind, ARGS_);       \
         if (var != NULL)                                                    \
             memcpy(var, &args.value, sizeof (Type));                        \
-        var;                                                                \
+        (__typeof__(Type)*) var;                                            \
     })
 
 # define smart_arr(Kind, Type, Length, ...)                                 \
     ({                                                                      \
+        enum pointer_kind akind = Kind | ARRAY;                             \
         struct s_tmp {                                                      \
             CSPTR_SENTINEL_DEC                                              \
             __typeof__(Type) *value;                                        \
@@ -128,7 +129,7 @@ CSPTR_INLINE void sfree_stack(void *ptr) {
             CSPTR_SENTINEL                                                  \
             __VA_ARGS__                                                     \
         };                                                                  \
-        void *var = smalloc(sizeof (Type), Length, Kind, ARGS_);            \
+        void *var = smalloc(sizeof (Type), Length, akind, ARGS_);           \
         if (var != NULL) {                                                  \
             if (args.value != NULL) {                                       \
                 memcpy(var, args.value, sizeof (Type) * Length);            \
@@ -155,7 +156,7 @@ typedef struct {
 
 CSPTR_PURE size_t array_length(const void *ptr);
 
-CSPTR_PURE size_t array_type_size(void *ptr);
+CSPTR_PURE size_t array_type_size(const void *ptr);
 CSPTR_PURE size_t array_size(const void *ptr);
 
 CSPTR_PURE void *array_user_meta(void *ptr);
@@ -168,10 +169,10 @@ CSPTR_PURE void *array_user_meta(void *ptr);
 
 CSPTR_PURE size_t array_length(const void *ptr) {
     s_meta_array *meta = get_smart_ptr_usermeta(ptr);
-    return meta ? meta->nmemb : 0;
+    return meta ? meta->nmemb : 1;  // TODO: instead of 1, it should be real array length
 }
 
-CSPTR_PURE size_t array_type_size(void *ptr) {
+CSPTR_PURE size_t array_type_size(const void *ptr) {
     s_meta_array *meta = get_smart_ptr_usermeta(ptr);
     return meta ? meta->size : 0;
 }
@@ -331,16 +332,16 @@ CSPTR_INLINE static void dealloc_entry(s_meta *meta, void *ptr) {
 }
 
 CSPTR_MALLOC_API
-static void *smalloc_impl(s_smalloc_args *args) {
-    if (!args->size)
+static void *smalloc_impl(const s_smalloc_args *args) {
+    if (!(args->size && args->nmemb))
         return NULL;
 
     // align the sizes to the size of a word
     size_t aligned_metasize = align(args->meta.size);
-    size_t rowdata_size = align(args->size);
+    size_t rowdata_size = align(args->size * args->nmemb);
 
     size_t head_size = args->kind & SHARED ? sizeof (s_meta_shared) : sizeof (s_meta);
-    s_meta_shared *ptr = alloc_entry(head_size, rowdata_size, aligned_metasize);
+    void *ptr = alloc_entry(head_size, rowdata_size, aligned_metasize);
     if (ptr == NULL)
         return NULL;
 
@@ -360,13 +361,13 @@ static void *smalloc_impl(s_smalloc_args *args) {
     };
 
     if (args->kind & SHARED)
-        ptr->ref_count = 1;
+        ((s_meta_shared*) ptr)->ref_count = 1;
 
     return sz + 1;
 }
 
 CSPTR_MALLOC_API
-CSPTR_INLINE static void *smalloc_array(s_smalloc_args *args) {
+CSPTR_INLINE static void *smalloc_array(const s_smalloc_args *args) {
     const size_t aligned_metasize = align(args->meta.size + sizeof(s_meta_array));
 #ifdef _MSC_VER
     char *new_meta = _alloca(aligned_metasize);
@@ -378,9 +379,12 @@ CSPTR_INLINE static void *smalloc_array(s_smalloc_args *args) {
         .size = args->size,
         .nmemb = args->nmemb,
     };
-    memcpy(arr_meta + 1, args->meta.data, args->meta.size);
+    if (args->meta.size && args->meta.data)
+        memcpy(arr_meta + 1, args->meta.data, args->meta.size);
+
     return smalloc_impl(&(s_smalloc_args) {
-            .size = args->nmemb * args->size,
+            .size = args->size,
+            .nmemb = args->nmemb,
             .kind = (enum pointer_kind) (args->kind | ARRAY),
             .dtor = args->dtor,
             .meta = {&new_meta, aligned_metasize },
@@ -389,7 +393,8 @@ CSPTR_INLINE static void *smalloc_array(s_smalloc_args *args) {
 
 CSPTR_MALLOC_API
 void *smalloc_(s_smalloc_args *args) {
-    return (args->nmemb == 0 ? smalloc_impl : smalloc_array)(args);
+//    return (args->nmemb == 0 ? smalloc_impl : smalloc_array)(args);
+    return (args->kind & ARRAY ?  smalloc_array: smalloc_impl)(args);
 }
 
 void sfree(void *ptr) {

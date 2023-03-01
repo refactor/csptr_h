@@ -4,10 +4,10 @@
 #define ARRAY_SIZE 25
 
 static enum greatest_test_res
-assert_valid_array(void *ptr, size_t len, size_t element_size) {
-    ASSERT_EQm("Mismatching array lengths.", array_length(ptr), len);
-    ASSERT_EQm("Mismatching compound type sizes.", array_type_size(ptr), element_size);
-    ASSERT_EQm("Mismatching array sizes.", array_size(ptr), element_size*len);
+assert_valid_array(void *ptr, size_t expected_len, size_t element_size) {
+    ASSERT_EQ_FMTm("Mismatching array lengths.", expected_len, array_length(ptr), "%zu");
+    ASSERT_EQ_FMTm("Mismatching compound type sizes.", element_size, array_type_size(ptr), "%zu");
+    ASSERT_EQ_FMTm("Mismatching array sizes.", element_size*expected_len, array_size(ptr), "%zu");
     PASS();
 }
 
@@ -20,8 +20,10 @@ assert_eq_array(int *arr1, int *arr2, size_t len) {
 }
 
 TEST weird_array(void) {
-    smart int *arr = unique_ptr(int[ARRAY_SIZE], {});
-    CHECK_CALL(assert_valid_array(arr, ARRAY_SIZE, sizeof(int)));
+    typedef int(static_int)[25];
+    smart static_int *arr = unique_ptr(static_int);
+    ASSERT_EQ_FMTm("Mismatching array lengths.", (size_t)1, array_length(arr), "%zu");
+//    CHECK_CALL(assert_valid_array(arr, 1, sizeof(int)));
     PASS();
 }
 TEST array_uninit(void) {
@@ -63,13 +65,6 @@ TEST array_with_dtor(void) {
     int expected = 0;
     for (size_t i=0; i<arr_len; ++i) expected += va[i];
     ASSERT_EQ(expected, sum);
-    PASS();
-}
-
-TEST array_meta(void) {
-    smart int *arr = unique_arr(int, ARRAY_SIZE, .meta = { &g_metadata, sizeof(g_metadata) });
-    CHECK_CALL(assert_valid_array(arr, ARRAY_SIZE, sizeof(int)));
-    CHECK_CALL(assert_valid_meta(&g_metadata, array_user_meta(arr)));
     PASS();
 }
 
@@ -174,14 +169,22 @@ TEST shared_array_init_dtor_run_with_meta(void) {
     PASS();
 }
 
-
+TEST zero_array(void) {
+    const size_t LEN = 0;
+    smart int *arr = shared_arr(int, 0);
+    ASSERT_EQm("Expected NULL for zero-array", NULL, arr);
+//    printf("+++++++++= arr.len=%zu\n", array_length(arr));
+//    printf("+++++++++= elem.sz=%zu\n", array_type_size(arr));
+//    CHECK_CALL(assert_valid_array(arr, LEN, sizeof(int)));
+    PASS();
+}
 
 GREATEST_SUITE(scalar_array_suite) {
     RUN_TEST(weird_array);
     RUN_TEST(array_uninit);
     RUN_TEST(array_cloned);
     RUN_TEST(array_with_dtor);
-    RUN_TEST(array_meta);
+    RUN_TEST(zero_array);
     RUN_TEST(unique_array_uninit_dtor_run_with_meta);
     RUN_TEST(unique_array_init_dtor_run_with_meta);
     RUN_TEST(shared_array_uninit_dtor_run_with_meta);

@@ -17,6 +17,17 @@ TEST zero_size_for_shared(void) {
     PASS();
 }
 
+TEST null_ptr(void) {
+    {
+        smart int *ptr2 = NULL;
+    }
+
+    int *ptr = NULL;
+    sfree(ptr);
+    PASS();
+}
+
+
 #ifndef SMALLOC_FIXED_ALLOCATOR
 TEST alloc_failure(void) {
     smalloc_allocator = (s_allocator) {
@@ -33,6 +44,7 @@ TEST alloc_failure(void) {
 GREATEST_SUITE(misc_suite) {
     RUN_TEST(zero_size_for_unique);
     RUN_TEST(zero_size_for_shared);
+    RUN_TEST(null_ptr);
 #ifndef SMALLOC_FIXED_ALLOCATOR
     RUN_TEST(alloc_failure);
 #endif
