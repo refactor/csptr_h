@@ -12,7 +12,7 @@ TEST shared_uninit(void) {
     CHECK_CALL(assert_valid_ptr(ptr));
     ASSERT_EQ(NULL, ptr->name);
     ASSERT_EQ(0, ptr->age);
-    ASSERT_EQm("Expected pointer to have no usermeta", NULL, get_smart_ptr_usermeta(ptr));
+    ASSERT_EQm("Expected pointer to have no usermeta", NULL, get_smart_ptr_userdata(ptr));
     PASS();
 }
 
@@ -57,7 +57,7 @@ TEST shared_init_dog(void) {
 
 TEST shared_sref(void) {
     int dtor_run = 0;
-    f_destructor dtor = lambda(void, (UNUSED void *ptr, UNUSED void *meta) { dtor_run = 1; });
+    f_destructor dtor = lambda(void, (UNUSED void *ptr, UNUSED void *userdata) { dtor_run = 1; });
     dog *ptr = shared_ptr(dog, { .name="Tom", .age=42 }, dtor);
     CHECK_CALL(assert_valid_ptr(ptr));
 
@@ -77,7 +77,7 @@ TEST shared_sref(void) {
 
 TEST unique_sref(void) {
     int dtor_run = 0;
-    f_destructor dtor = lambda(void, (UNUSED void *ptr, UNUSED void *meta) { dtor_run = 1; });
+    f_destructor dtor = lambda(void, (UNUSED void *ptr, UNUSED void *userdata) { dtor_run = 1; });
     smart dog *ptr = unique_ptr(dog, { .name="Tom", .age=42 }, dtor);
     CHECK_CALL(assert_valid_ptr(ptr) );
     ASSERT_EQ("Tom", ptr->name);
@@ -102,15 +102,15 @@ TEST shared_dog_with_usermeta(void) {
     int dtor_run = 0;
     dog *ptr = NULL;
     {
-        f_destructor dtor = lambda(void, (void *ptr, void *meta) {
+        f_destructor dtor = lambda(void, (void *ptr, void *userdata) {
             dog* a = (dog*)ptr;
-            struct owner* pm = (struct owner*)meta;
- //           struct meta* pm = (struct meta*)array_user_meta(meta);
+            struct owner* pm = (struct owner*)userdata;
+ //           struct meta* pm = (struct meta*)array_userdata(meta);
             printf("\tdtor -> dog: name=%s, age=%d ; owner: %s, lost_dog_num=%d\n", a->name, a->age,  pm->master,pm->lost_dog_num);
             dtor_run++;
         });
         const char* name = "Tommason";
-        smart dog *ptr1 = shared_ptr(dog, {.name=name,.age=11}, .dtor=dtor, .meta={&um, sizeof(um)});
+        smart dog *ptr1 = shared_ptr(dog, {.name=name,.age=11}, .dtor=dtor, .userdata={&um, sizeof(um)});
         CHECK_CALL(assert_valid_ptr(ptr1));
         ASSERT_EQ(name, ptr1->name);
         ASSERT_EQ_FMT(11, ptr1->age, "%d");

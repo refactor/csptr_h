@@ -7,7 +7,7 @@
 TEST pointer_valid(void) {
     smart int *a = unique_ptr(int, 42);
     CHECK_CALL(assert_valid_ptr(a));
-    ASSERT_EQm("Expected pointer to have no metadata", NULL, get_smart_ptr_usermeta(a));
+    ASSERT_EQm("Expected pointer to have no metadata", NULL, get_smart_ptr_userdata(a));
     PASS();
 }
 
@@ -16,7 +16,7 @@ TEST dtor_run(void) {
     f_destructor dtor = lambda(void, (UNUSED void *ptr, UNUSED void *meta) { dtor_run = 1; });
     int *a = unique_ptr(int, 42, dtor);
     CHECK_CALL(assert_valid_ptr(a));
-    ASSERT_EQm("Expected pointer to have no metadata", NULL, get_smart_ptr_usermeta(a));
+    ASSERT_EQm("Expected pointer to have no metadata", NULL, get_smart_ptr_userdata(a));
     ASSERT_EQm("Expected destructor NOT run", 0, dtor_run);
     sfree(a);
     ASSERT_EQm("Expected destructor to run", 1, dtor_run);
@@ -24,20 +24,20 @@ TEST dtor_run(void) {
 }
 
 TEST meta_test(void) {
-    smart int *a = unique_ptr(int, 42, .meta = { &g_metadata, sizeof(g_metadata) });
+    smart int *a = unique_ptr(int, 42, .userdata = { &g_metadata, sizeof(g_metadata) });
     CHECK_CALL(assert_valid_ptr(a));
-    ASSERT_NEQm("Expected different points", &g_metadata, get_smart_ptr_usermeta(a));
-    CHECK_CALL(assert_valid_meta(&g_metadata, get_smart_ptr_usermeta(a)));
+    ASSERT_NEQm("Expected different points", &g_metadata, get_smart_ptr_userdata(a));
+    CHECK_CALL(assert_valid_meta(&g_metadata, get_smart_ptr_userdata(a)));
     PASS();
 }
 
 TEST dtor_run_with_meta(void) {
     int dtor_run = 0;
-    f_destructor dtor = lambda(void, (UNUSED void *ptr, UNUSED void *meta) { dtor_run = 1; });
+    f_destructor dtor = lambda(void, (UNUSED void *ptr, UNUSED void *userdata) { dtor_run = 1; });
     int *a = unique_ptr(int, 42, dtor, { &g_metadata, sizeof(g_metadata) });
     CHECK_CALL(assert_valid_ptr(a));
-    ASSERT_NEQm("Expected different points", &g_metadata, get_smart_ptr_usermeta(a));
-    CHECK_CALL(assert_valid_meta(&g_metadata, get_smart_ptr_usermeta(a)));
+    ASSERT_NEQm("Expected different points", &g_metadata, get_smart_ptr_userdata(a));
+    CHECK_CALL(assert_valid_meta(&g_metadata, get_smart_ptr_userdata(a)));
 
     ASSERT_EQm("Expected destructor NOT run", 0, dtor_run);
     sfree(a);

@@ -6,7 +6,7 @@
 static enum greatest_test_res
 assert_valid_array(void *ptr, size_t expected_len, size_t element_size) {
     ASSERT_EQ_FMTm("Mismatching array lengths.", expected_len, array_length(ptr), "%zu");
-    ASSERT_EQ_FMTm("Mismatching compound type sizes.", element_size, array_type_size(ptr), "%zu");
+    ASSERT_EQ_FMTm("Mismatching compound type sizes.", element_size, array_item_size(ptr), "%zu");
     ASSERT_EQ_FMTm("Mismatching array sizes.", element_size*expected_len, array_size(ptr), "%zu");
     PASS();
 }
@@ -78,9 +78,9 @@ TEST unique_array_uninit_dtor_run_with_meta(void) {
         dtor_run++;
     });
 
-    int *arr = unique_arr(int, ARRAY_SIZE, .dtor=dtor, .meta={ &g_metadata, sizeof(g_metadata) });
+    int *arr = unique_arr(int, ARRAY_SIZE, .dtor=dtor, .userdata={ &g_metadata, sizeof(g_metadata) });
     CHECK_CALL(assert_valid_array(arr, ARRAY_SIZE, sizeof(int)));
-    CHECK_CALL(assert_valid_meta(&g_metadata, array_user_meta(arr)));
+    CHECK_CALL(assert_valid_meta(&g_metadata, array_userdata(arr)));
 
     sfree(arr);
     ASSERT_EQm("Expected uninit-array set 0", 0, sum);
@@ -100,9 +100,9 @@ TEST unique_array_init_dtor_run_with_meta(void) {
 
     int ARR[] = {1, 3, 5, 7, 9, 11};
     const size_t LEN = sizeof(ARR)/sizeof(ARR[0]);
-    int *arr = unique_arr(int, LEN, ARR, .dtor=dtor, .meta={ &g_metadata, sizeof(g_metadata) });
+    int *arr = unique_arr(int, LEN, ARR, .dtor=dtor, .userdata={ &g_metadata, sizeof(g_metadata) });
     CHECK_CALL(assert_valid_array(arr, LEN, sizeof(int)));
-    CHECK_CALL(assert_valid_meta(&g_metadata, array_user_meta(arr)));
+    CHECK_CALL(assert_valid_meta(&g_metadata, array_userdata(arr)));
 
     sfree(arr);
     int s = 0;
@@ -122,14 +122,14 @@ TEST shared_array_uninit_dtor_run_with_meta(void) {
         dtor_run++;
     });
 
-    int *arr = shared_arr(int, ARRAY_SIZE, .dtor=dtor, .meta={ &g_metadata, sizeof(g_metadata) });
+    int *arr = shared_arr(int, ARRAY_SIZE, .dtor=dtor, .userdata={ &g_metadata, sizeof(g_metadata) });
     CHECK_CALL(assert_valid_array(arr, ARRAY_SIZE, sizeof(int)));
-    CHECK_CALL(assert_valid_meta(&g_metadata, array_user_meta(arr)));
+    CHECK_CALL(assert_valid_meta(&g_metadata, array_userdata(arr)));
 
     {
         autoclean int* ptr = sref(arr);
         CHECK_CALL(assert_valid_array(ptr, ARRAY_SIZE, sizeof(int)));
-        CHECK_CALL(assert_valid_meta(&g_metadata, array_user_meta(ptr)));
+        CHECK_CALL(assert_valid_meta(&g_metadata, array_userdata(ptr)));
         ASSERT_EQ(0, dtor_run);
     }
     ASSERT_EQ(0, dtor_run);
@@ -150,14 +150,14 @@ TEST shared_array_init_dtor_run_with_meta(void) {
 
     int ARR[] = {1, 3, 5, 7, 9, 11};
     const size_t LEN = sizeof(ARR)/sizeof(ARR[0]);
-    int *arr = shared_arr(int, LEN, ARR, .dtor=dtor, .meta={ &g_metadata, sizeof(g_metadata) });
+    int *arr = shared_arr(int, LEN, ARR, .dtor=dtor, .userdata={ &g_metadata, sizeof(g_metadata) });
     CHECK_CALL(assert_valid_array(arr, LEN, sizeof(int)));
-    CHECK_CALL(assert_valid_meta(&g_metadata, array_user_meta(arr)));
+    CHECK_CALL(assert_valid_meta(&g_metadata, array_userdata(arr)));
 
     {
         autoclean int* ptr = sref(arr);
         CHECK_CALL(assert_valid_array(ptr, LEN, sizeof(int)));
-        CHECK_CALL(assert_valid_meta(&g_metadata, array_user_meta(ptr)));
+        CHECK_CALL(assert_valid_meta(&g_metadata, array_userdata(ptr)));
         ASSERT_EQ(0, dtor_run);
     }
     ASSERT_EQ(0, dtor_run);
@@ -174,7 +174,7 @@ TEST zero_array(void) {
     smart int *arr = shared_arr(int, 0);
     ASSERT_EQm("Expected NULL for zero-array", NULL, arr);
 //    printf("+++++++++= arr.len=%zu\n", array_length(arr));
-//    printf("+++++++++= elem.sz=%zu\n", array_type_size(arr));
+//    printf("+++++++++= elem.sz=%zu\n", array_item_size(arr));
 //    CHECK_CALL(assert_valid_array(arr, LEN, sizeof(int)));
     PASS();
 }

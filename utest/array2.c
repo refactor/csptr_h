@@ -6,7 +6,7 @@
 static enum greatest_test_res
 assert_valid_array(void *ptr, size_t len, size_t size) {
     ASSERT_EQm("Mismatching array lengths.", array_length(ptr), len);
-    ASSERT_EQm("Mismatching compound type sizes.", array_type_size(ptr), size);
+    ASSERT_EQm("Mismatching compound type sizes.", array_item_size(ptr), size);
     ASSERT_EQm("Mismatching array sizes.", array_size(ptr), len*size);
     PASS();
 }
@@ -79,13 +79,13 @@ TEST array_dtor_run(void) {
 }
 
 TEST array_meta(void) {
-    smart anim *arr = unique_arr(anim, LEN(as), as, .meta= { &g_metadata, sizeof(g_metadata) });
+    smart anim *arr = unique_arr(anim, LEN(as), as, .userdata= { &g_metadata, sizeof(g_metadata) });
     ASSERT_EQ(LEN(as), array_length(arr));
     CHECK_CALL(assert_eq_array(as, arr, LEN(as)));
 
     CHECK_CALL(assert_valid_array(arr, LEN(as), sizeof(struct anim)));
-    CHECK_CALL(assert_valid_meta(&g_metadata, array_user_meta(arr)));
-    ASSERT_NEQ(&g_metadata, array_user_meta(arr));
+    CHECK_CALL(assert_valid_meta(&g_metadata, array_userdata(arr)));
+    ASSERT_NEQ(&g_metadata, array_userdata(arr));
     PASS();
 }
 
@@ -94,7 +94,7 @@ TEST array_dtor_run_with_meta(void) {
     f_destructor dtor = lambda(void, (void *ptr, void *meta) {
             anim* a = (anim*)ptr;
             struct my_userdata* pm = (struct my_userdata*)meta;
- //           struct meta* pm = (struct meta*)array_user_meta(meta);
+ //           struct meta* pm = (struct meta*)array_userdata(meta);
             printf("\tdtor -> name: %s, age: %d, weight: %f; meta: i=%d,l=%ld,d=%f\n", a->name, a->age, a->weight,pm->i,pm->l,pm->d);
             dtor_run = 1;
         });
@@ -105,8 +105,8 @@ TEST array_dtor_run_with_meta(void) {
     CHECK_CALL(assert_eq_array(as, arr, LEN(as)));
 
     CHECK_CALL(assert_valid_array(arr, LEN(as), sizeof(struct anim)));
-    CHECK_CALL(assert_valid_meta(&g_metadata, array_user_meta(arr)));
-    ASSERT_NEQ(&g_metadata, array_user_meta(arr));
+    CHECK_CALL(assert_valid_meta(&g_metadata, array_userdata(arr)));
+    ASSERT_NEQ(&g_metadata, array_userdata(arr));
 
     sfree(arr);
     ASSERT_EQm("Expected destructor to run", 1, dtor_run);
