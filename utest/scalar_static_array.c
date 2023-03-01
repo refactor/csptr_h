@@ -26,14 +26,16 @@ TEST weird_point(void) {
 //    CHECK_CALL(assert_valid_array(arr, 1, sizeof(int)));
     PASS();
 }
-TEST array_uninit(void) {
+
+TEST unique_uninited(void) {
     smart int *arr = unique_arr(int, ARRAY_SIZE);
     CHECK_CALL(assert_valid_array(arr, ARRAY_SIZE, sizeof(int)));
     int ea[ARRAY_SIZE] = { 0 };
     CHECK_CALL(assert_eq_array(ea, arr, ARRAY_SIZE));
     PASS();
 }
-TEST array_cloned(void) {
+
+TEST shared_inited(void) {
     int va[] = {1,2,3,4,5,6,7};
     smart int *arr = shared_arr(int, 7, va);//(int[7]){1,2,3,4,5,6,7});
     CHECK_CALL(assert_valid_array(arr, 7, sizeof(int)));
@@ -42,7 +44,7 @@ TEST array_cloned(void) {
     PASS();
 }
 
-TEST array_with_dtor(void) {
+TEST shared_inited_with_dtor(void) {
     volatile int sum = 0;
     volatile size_t dtor_run = 0;
     f_destructor arrary_element_dtor = lambda(void, (void *ptr, void *userdata) {
@@ -68,7 +70,7 @@ TEST array_with_dtor(void) {
     PASS();
 }
 
-TEST unique_array_uninit_dtor_run_with_meta(void) {
+TEST unique_uninited_with_userdata_and_dtor(void) {
     int dtor_run = 0;
     size_t sum = 0;
     f_destructor dtor = lambda(void, (void *ptr, void *meta) {
@@ -88,7 +90,7 @@ TEST unique_array_uninit_dtor_run_with_meta(void) {
     PASS();
 }
 
-TEST unique_array_init_dtor_run_with_meta(void) {
+TEST unique_inited_with_userdata_and_dtor(void) {
     size_t dtor_run = 0;
     int sum = 0;
     f_destructor dtor = lambda(void, (void *ptr, void *meta) {
@@ -112,7 +114,7 @@ TEST unique_array_init_dtor_run_with_meta(void) {
     PASS();
 }
 
-TEST shared_array_uninit_dtor_run_with_meta(void) {
+TEST shared_uninited_with_userdata_and_dtor(void) {
     size_t dtor_run = 0;
     int sum = 0;
     f_destructor dtor = lambda(void, (void *ptr, void *meta) {
@@ -139,7 +141,7 @@ TEST shared_array_uninit_dtor_run_with_meta(void) {
     PASS();
 }
 
-TEST shared_array_init_dtor_run_with_meta(void) {
+TEST shared_inited_with_userdata_and_dtor(void) {
     size_t dtor_run = 0;
     int sum = 0;
     f_destructor dtor = lambda(void, (void *ptr, void *meta) {
@@ -176,15 +178,15 @@ TEST zero_array(void) {
     PASS();
 }
 
-GREATEST_SUITE(scalar_array_suite) {
+GREATEST_SUITE(scalar_static_array) {
     RUN_TEST(weird_point);
-    RUN_TEST(array_uninit);
-    RUN_TEST(array_cloned);
-    RUN_TEST(array_with_dtor);
+    RUN_TEST(unique_uninited);
+    RUN_TEST(shared_inited);
+    RUN_TEST(shared_inited_with_dtor);
     RUN_TEST(zero_array);
-    RUN_TEST(unique_array_uninit_dtor_run_with_meta);
-    RUN_TEST(unique_array_init_dtor_run_with_meta);
-    RUN_TEST(shared_array_uninit_dtor_run_with_meta);
-    RUN_TEST(shared_array_init_dtor_run_with_meta);
+    RUN_TEST(unique_uninited_with_userdata_and_dtor);
+    RUN_TEST(unique_inited_with_userdata_and_dtor);
+    RUN_TEST(shared_uninited_with_userdata_and_dtor);
+    RUN_TEST(shared_inited_with_userdata_and_dtor);
 }
 

@@ -14,7 +14,7 @@ all: demo
 
 test: ${TEST_OBJ}
 	gcc -o $@ $^
-	-@./test
+	-@./test -v | ./greenest
 
 clean:
 	-@rm ./*.o ./test ./a.out ./demo ${TEST_OBJ} 2> /dev/null ||true

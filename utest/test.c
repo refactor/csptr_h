@@ -8,8 +8,8 @@ const struct my_userdata g_metadata = {1, 2, 3};
 SUITE_EXTERN(misc_suite);
 SUITE_EXTERN(scalar_suite);
 SUITE_EXTERN(struct_scalar);
-SUITE_EXTERN(scalar_array_suite);
-SUITE_EXTERN(struct_array_suite);
+SUITE_EXTERN(scalar_static_array);
+SUITE_EXTERN(struct_static_array);
 
 
 GREATEST_MAIN_DEFS();
@@ -20,8 +20,8 @@ int main(int argc, char* argv[]) {
     RUN_SUITE(misc_suite);
     RUN_SUITE(scalar_suite);
     RUN_SUITE(struct_scalar);
-    RUN_SUITE(scalar_array_suite);
-    RUN_SUITE(struct_array_suite);
+    RUN_SUITE(scalar_static_array);
+    RUN_SUITE(struct_static_array);
 
     GREATEST_MAIN_END();
 }

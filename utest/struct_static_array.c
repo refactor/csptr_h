@@ -109,7 +109,7 @@ TEST array_dtor_run_with_meta(void) {
 }
 
 
-GREATEST_SUITE(struct_array_suite) {
+GREATEST_SUITE(struct_static_array) {
     RUN_TEST(uninit_array);
     RUN_TEST(array);
     RUN_TEST(array_dtor_run);
