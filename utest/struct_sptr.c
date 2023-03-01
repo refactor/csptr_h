@@ -151,7 +151,7 @@ TEST shared_inited_with_userdata_and_dtor(void) {
     PASS();
 }
 
-GREATEST_SUITE(struct_scalar) {
+GREATEST_SUITE(struct_sptr) {
     RUN_TEST(shared_uninit);
     RUN_TEST(unique_uninited);
     RUN_TEST(unique_uninited_with_dtor);

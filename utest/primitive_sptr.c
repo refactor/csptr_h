@@ -141,7 +141,7 @@ TEST shared_inited_with_userdata_and_dtor(void) {
     PASS();
 }
 
-GREATEST_SUITE(scalar_suite) {
+GREATEST_SUITE(primitive_sptr) {
     RUN_TEST(unique_inited);
     RUN_TEST(shared_inited);
     RUN_TEST(unique_inited_with_userdata);

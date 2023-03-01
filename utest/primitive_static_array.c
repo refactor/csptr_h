@@ -178,7 +178,7 @@ TEST zero_array(void) {
     PASS();
 }
 
-GREATEST_SUITE(scalar_static_array) {
+GREATEST_SUITE(primitive_static_array) {
     RUN_TEST(weird_point);
     RUN_TEST(unique_uninited);
     RUN_TEST(shared_inited);

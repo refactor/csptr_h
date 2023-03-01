@@ -40,7 +40,7 @@ enum pointer_kind {
     UNIQUE = 1,
     SHARED = 2,
 
-    ARRAY = 4
+    STATIC_ARRAY = 4
 };
 
 typedef void (*f_destructor)(void *, void *);
@@ -116,7 +116,7 @@ CSPTR_INLINE void sfree_stack(void *ptr) {
 
 # define smart_arr(Kind, Type, Length, ...)                                 \
     ({                                                                      \
-        enum pointer_kind akind = Kind | ARRAY;                             \
+        enum pointer_kind akind = Kind | STATIC_ARRAY;                             \
         struct s_tmp {                                                      \
             CSPTR_SENTINEL_DEC                                              \
             __typeof__(Type) *value;                                        \
@@ -268,12 +268,12 @@ void *smove_size(void *ptr, size_t size) {
     s_smalloc_args args;
 
     size_t *metasize = (size_t *) ptr - 1;
-    if (meta->kind & ARRAY) {
+    if (meta->kind & STATIC_ARRAY) {
         s_meta_array *arr_meta = get_smart_ptr_meta_array_(ptr);
         args = (s_smalloc_args) {
             .item_size = arr_meta->itemsize,
             .item_num = arr_meta->itemnum,
-            .kind = (enum pointer_kind) (SHARED | ARRAY),
+            .kind = (enum pointer_kind) (SHARED | STATIC_ARRAY),
             .dtor = meta->dtor,
             .userdata = { arr_meta, *metasize },
         };
@@ -305,7 +305,7 @@ CSPTR_INLINE static void *alloc_entry(size_t head, size_t size, size_t metasize)
 CSPTR_INLINE static void dealloc_entry(s_meta *meta, void *ptr) {
     if (meta->dtor) {
         void * const userdata = get_smart_ptr_userdata(ptr);
-        if (meta->kind & ARRAY) {
+        if (meta->kind & STATIC_ARRAY) {
             s_meta_array *arr_meta = get_smart_ptr_meta_array_(ptr);//(void *) (meta + 1);
             for (size_t i = 0; i < arr_meta->itemnum; ++i)
                 meta->dtor((char *) ptr + arr_meta->itemsize * i, userdata);
@@ -325,7 +325,7 @@ static inline size_t get_meta_header_size_(enum pointer_kind kind) {
     return kind & SHARED ? sizeof (s_meta_shared) : sizeof (s_meta);
 }
 static inline size_t get_meta_array_size_(enum pointer_kind kind) {
-    return kind & ARRAY ? sizeof(s_meta_array) : 0;
+    return kind & STATIC_ARRAY ? sizeof(s_meta_array) : 0;
 }
 static inline size_t get_meta_size_(enum pointer_kind kind) {
     return get_meta_header_size_(kind) + get_meta_array_size_(kind);
@@ -355,7 +355,7 @@ static void *smalloc_impl_(const s_smalloc_args *args) {
     if (args->userdata.size && args->userdata.data)
         memcpy(userdata_ptr, args->userdata.data, args->userdata.size);
 
-    if (args->kind & ARRAY) {
+    if (args->kind & STATIC_ARRAY) {
         s_meta_array *meta_array = get_ptr_meta_array_(raw_ptr, args->kind);
         *meta_array = (s_meta_array) {
                 .itemnum = args->item_num,
@@ -385,7 +385,7 @@ static s_meta_array *get_smart_ptr_meta_array_(const void * const smart_ptr) {
 
     s_meta * const raw_ptr = get_smart_ptr_meta_(smart_ptr);
     assert(raw_ptr->ptr == smart_ptr);
-    if (!(raw_ptr->kind & ARRAY) ){
+    if (!(raw_ptr->kind & STATIC_ARRAY) ){
         return NULL;
     }
     size_t header_size = get_meta_header_size_(raw_ptr->kind);
