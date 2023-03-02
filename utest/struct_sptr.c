@@ -13,6 +13,7 @@ TEST shared_uninit(void) {
     CHECK_CALL(assert_valid_ptr(ptr));
     ASSERT_EQ(NULL, ptr->name);
     ASSERT_EQ(0, ptr->age);
+    ASSERT_EQ(0, ptr->weight);
     ASSERT_EQm("Expected pointer to have no usermeta", NULL, get_smart_ptr_userdata(ptr));
     PASS();
 }
@@ -22,6 +23,7 @@ TEST unique_uninited(void) {
     CHECK_CALL(assert_valid_ptr(ptr));
     ASSERT_EQ(NULL, ptr->name);
     ASSERT_EQ(0, ptr->age);
+    ASSERT_EQ(0, ptr->weight);
     ASSERT_EQm("Expected pointer to have no usermeta", NULL, get_smart_ptr_userdata(ptr));
     PASS();
 }
@@ -40,6 +42,7 @@ TEST unique_uninited_with_dtor(void) {
         CHECK_CALL(assert_valid_ptr(ptr));
         ASSERT_EQ(NULL, ptr->name);
         ASSERT_EQ(0, ptr->age);
+        ASSERT_EQ(0, ptr->weight);
         ASSERT_EQm("Expected pointer to have no usermeta", NULL, get_smart_ptr_userdata(ptr));
         ASSERT_EQ(0, dead_dog_count);
     }
@@ -55,6 +58,7 @@ TEST unique_inited_with_dtor(void) {
         CHECK_CALL(assert_valid_ptr(ptr) );
         ASSERT_EQ("Tom", ptr->name);
         ASSERT_EQ(42, ptr->age);
+        ASSERT_EQ(0, ptr->weight);
         ASSERT_EQ(0, dtor_run);
     }
 //    sfree(ptr);
@@ -72,7 +76,7 @@ TEST shared_inited_with_dtor(void) {
             CHECK_CALL(assert_valid_ptr(ptr1));
             ASSERT_EQ(name, ptr1->name);
             ASSERT_EQ(7, ptr1->age);
-            ptr = sref(ptr1);
+           ptr = sref(ptr1);
             ASSERT_EQm("Expected pointer to have no userdata", NULL, get_smart_ptr_userdata(ptr));
         }
         ASSERT_EQm("expected dead dog is 0", 0, dead_dog_count);

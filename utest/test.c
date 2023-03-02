@@ -1,7 +1,7 @@
+#include "utils.h"
+
 #define MY_LIBCSPTR_IMPLEMENTATION
 #include "../csptr.h"
-
-#include "utils.h"
 
 const struct my_userdata g_metadata = {1, 2, 3};
 

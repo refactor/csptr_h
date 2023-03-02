@@ -1,4 +1,5 @@
 #pragma once
+#include "../csptr.h"
 
 #define GREATEST_USE_LONGJMP 1
 #include "greatest.h"
@@ -15,6 +16,14 @@ static enum greatest_test_res
 assert_valid_ptr(void* ptr) {
     ASSERT_NEQm("Expected unique_ptr to return a non-null pointer.", NULL, ptr);
     ASSERT_EQm("Expected unique_ptr to return an aligned pointer.", true, is_aligned(ptr));
+    PASS();
+}
+
+static enum greatest_test_res
+assert_valid_array(void *ptr, size_t expected_cap, size_t element_size) {
+    ASSERT_EQ_FMTm("Mismatching array lengths.", expected_cap, static_array.capacity(ptr), "%zu");
+    ASSERT_EQ_FMTm("Mismatching compound type sizes.", element_size, static_array.item_size(ptr), "%zu");
+    ASSERT_EQ_FMTm("Mismatching array sizes.", element_size * expected_cap, static_array.total_size(ptr), "%zu");
     PASS();
 }
 

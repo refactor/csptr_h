@@ -3,14 +3,6 @@
 
 #define ARRAY_SIZE 25
 
-static enum greatest_test_res
-assert_valid_array(void *ptr, size_t len, size_t size) {
-    ASSERT_EQm("Mismatching array lengths.", array_length(ptr), len);
-    ASSERT_EQm("Mismatching compound type sizes.", array_item_size(ptr), size);
-    ASSERT_EQm("Mismatching array sizes.", array_size(ptr), len*size);
-    PASS();
-}
-
 typedef struct anim {
     const char* name;
     int age;
@@ -45,7 +37,7 @@ assert_eq_array(anim *arr1, anim *arr2, size_t len) {
 TEST uninit_array(void) {
     smart anim *arr = unique_arr(anim, LEN(as));
     CHECK_CALL(assert_valid_array(arr, LEN(as), sizeof(struct anim)));
-    ASSERT_EQ(LEN(as), array_length(arr));
+    ASSERT_EQ(LEN(as), static_array.length(arr));
 
     anim emptys[] ={{},{}};
     CHECK_CALL(assert_eq_array(emptys, arr, LEN(emptys)));
@@ -55,7 +47,7 @@ TEST uninit_array(void) {
 TEST array(void) {
     smart anim *arr = unique_arr(anim, LEN(as), as);
     CHECK_CALL(assert_valid_array(arr, LEN(as), sizeof(struct anim)));
-    ASSERT_EQ(LEN(as), array_length(arr));
+    ASSERT_EQ(LEN(as), static_array.length(arr));
     CHECK_CALL(assert_eq_array(as, arr, LEN(as)));
     PASS();
 }
@@ -68,7 +60,7 @@ TEST array_dtor_run(void) {
         });
     anim *arr = unique_arr(anim, LEN(as), as, dtor);
     CHECK_CALL(assert_valid_array(arr, LEN(as), sizeof(struct anim)));
-    ASSERT_EQ(LEN(as), array_length(arr));
+    ASSERT_EQ(LEN(as), static_array.length(arr));
     CHECK_CALL(assert_eq_array(as, arr, LEN(as)));
 
     sfree(arr);
@@ -78,7 +70,7 @@ TEST array_dtor_run(void) {
 
 TEST array_meta(void) {
     smart anim *arr = unique_arr(anim, LEN(as), as, .userdata= { &g_metadata, sizeof(g_metadata) });
-    ASSERT_EQ(LEN(as), array_length(arr));
+    ASSERT_EQ(LEN(as), static_array.length(arr));
     CHECK_CALL(assert_eq_array(as, arr, LEN(as)));
 
     CHECK_CALL(assert_valid_array(arr, LEN(as), sizeof(struct anim)));
@@ -96,7 +88,7 @@ TEST array_dtor_run_with_meta(void) {
         });
  
     anim *arr = unique_arr(anim, LEN(as), as, dtor, { &g_metadata, sizeof(g_metadata) });
-    ASSERT_EQ(LEN(as), array_length(arr));
+    ASSERT_EQ(LEN(as), static_array.length(arr));
     CHECK_CALL(assert_eq_array(as, arr, LEN(as)));
 
     CHECK_CALL(assert_valid_array(arr, LEN(as), sizeof(struct anim)));

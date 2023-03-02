@@ -117,7 +117,7 @@ CSPTR_INLINE void sfree_stack(void *ptr) {
 
 # define smart_arr(Kind, Type, Length, ...)                                 \
     ({                                                                      \
-        enum pointer_kind akind = Kind | STATIC_ARRAY;                             \
+        enum pointer_kind akind = Kind | STATIC_ARRAY;                      \
         struct s_tmp {                                                      \
             CSPTR_SENTINEL_DEC                                              \
             __typeof__(Type) *value;                                        \
@@ -139,7 +139,7 @@ CSPTR_INLINE void sfree_stack(void *ptr) {
                 memset(var, 0, sizeof(Type) * Length);                      \
             }                                                               \
         }                                                                   \
-        var;                                                                \
+        (__typeof__(Type)*) var;                                            \
     })
 
 # define shared_ptr(Type, ...) smart_ptr(SHARED, Type, __VA_ARGS__)
@@ -148,12 +148,17 @@ CSPTR_INLINE void sfree_stack(void *ptr) {
 # define shared_arr(Type, Length, ...) smart_arr(SHARED, Type, Length, __VA_ARGS__)
 # define unique_arr(Type, Length, ...) smart_arr(UNIQUE, Type, Length, __VA_ARGS__)
 
+struct smt_static_array_ns {
+    size_t (*capacity)(const void* smart_arr);
+    size_t (*length)(const void* smart_arr);
+    size_t (*item_size)(const void* smart_arr);
+    size_t (*total_size)(const void* smart_arr);
+};
+
+extern const struct smt_static_array_ns static_array;
+extern const struct smt_dynamic_array_ns dynamic_array;
 
 
-CSPTR_PURE size_t array_length(const void *ptr);
-
-CSPTR_PURE size_t array_item_size(const void *ptr);
-CSPTR_PURE size_t array_size(const void *ptr);
 
 CSPTR_PURE void *array_userdata(void *ptr);
 
@@ -161,8 +166,6 @@ CSPTR_PURE void *array_userdata(void *ptr);
 #endif //MY_LIBCSPTR_H
 
 #ifdef MY_LIBCSPTR_IMPLEMENTATION
-
-
 
 typedef struct {
     enum pointer_kind kind;
@@ -180,25 +183,42 @@ typedef struct {
 typedef struct {
     size_t itemnum;
     size_t itemsize;
+    size_t item_capacity;
 } s_meta_array;
 
 CSPTR_PURE
 static s_meta_array *get_smart_ptr_meta_array_(const void * const smart_ptr);
 
-CSPTR_PURE size_t array_length(const void *smart_ptr) {
+CSPTR_PURE
+static size_t array_length(const void *smart_ptr) {
     s_meta_array *meta = get_smart_ptr_meta_array_(smart_ptr);
     return meta ? meta->itemnum : 1;  // TODO: instead of 1, it should be real array length
 }
 
-CSPTR_PURE size_t array_item_size(const void *smart_ptr) {
+CSPTR_PURE
+static size_t array_item_size(const void *smart_ptr) {
     s_meta_array *meta = get_smart_ptr_meta_array_(smart_ptr);
     return meta ? meta->itemsize : 0;
 }
 
-CSPTR_PURE size_t array_size(const void *smart_ptr) {
+CSPTR_PURE
+static size_t array_size(const void *smart_ptr) {
     s_meta_array *meta = get_smart_ptr_meta_array_(smart_ptr);
     return meta ? meta->itemsize * meta->itemnum : 0;
 }
+
+CSPTR_PURE
+static size_t array_capacity_(const void *smart_ptr) {
+    s_meta_array *meta = get_smart_ptr_meta_array_(smart_ptr);
+    return meta ? meta->item_capacity : 0;
+}
+
+const struct smt_static_array_ns static_array = {
+        .length = array_length,
+        .item_size = array_item_size,
+        .total_size = array_size,
+        .capacity = array_capacity_
+};
 
 CSPTR_PURE CSPTR_INLINE void *array_userdata(void *smart_ptr) {
     s_meta_array *meta = get_smart_ptr_meta_array_(smart_ptr);
@@ -322,7 +342,15 @@ static inline size_t get_meta_header_size_(enum pointer_kind kind) {
     return kind & SHARED ? sizeof (s_meta_shared) : sizeof (s_meta_header);
 }
 static inline size_t get_meta_array_size_(enum pointer_kind kind) {
-    return kind & STATIC_ARRAY ? sizeof(s_meta_array) : 0;
+//    return kind & STATIC_ARRAY ? sizeof(s_meta_array) : 0;
+    switch (kind & (STATIC_ARRAY | DYNAMIC_ARRAY)) {
+        case STATIC_ARRAY:
+            return sizeof(s_meta_array);
+        case DYNAMIC_ARRAY:
+//            return sizeof(s_meta_dynamic_array);
+        default:
+            return 0;
+    }
 }
 static inline size_t get_meta_size_(enum pointer_kind kind) {
     return get_meta_header_size_(kind) + get_meta_array_size_(kind);
@@ -355,6 +383,7 @@ static void *smalloc_impl_(const s_smalloc_args *args) {
     if (args->kind & STATIC_ARRAY) {
         s_meta_array *meta_array = get_ptr_meta_array_(raw_ptr, args->kind);
         *meta_array = (s_meta_array) {
+                .item_capacity = args->item_num,
                 .itemnum = args->item_num,
                 .itemsize = args->item_size
         };
