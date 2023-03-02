@@ -40,7 +40,8 @@ enum pointer_kind {
     UNIQUE = 1,
     SHARED = 2,
 
-    STATIC_ARRAY = 4
+    STATIC_ARRAY = 4,
+    DYNAMIC_ARRAY = 8
 };
 
 typedef void (*f_destructor)(void *, void *);
@@ -149,11 +150,6 @@ CSPTR_INLINE void sfree_stack(void *ptr) {
 
 
 
-typedef struct {
-    size_t itemnum;
-    size_t itemsize;
-} s_meta_array;
-
 CSPTR_PURE size_t array_length(const void *ptr);
 
 CSPTR_PURE size_t array_item_size(const void *ptr);
@@ -166,6 +162,25 @@ CSPTR_PURE void *array_userdata(void *ptr);
 
 #ifdef MY_LIBCSPTR_IMPLEMENTATION
 
+
+
+typedef struct {
+    enum pointer_kind kind;
+    f_destructor dtor;
+#ifndef NDEBUG
+    void *ptr;
+#endif /* !NDEBUG */
+} s_meta_header;
+
+typedef struct {
+    s_meta_header header;
+    volatile size_t ref_count;
+} s_meta_shared;
+
+typedef struct {
+    size_t itemnum;
+    size_t itemsize;
+} s_meta_array;
 
 CSPTR_PURE
 static s_meta_array *get_smart_ptr_meta_array_(const void * const smart_ptr);
@@ -189,24 +204,6 @@ CSPTR_PURE CSPTR_INLINE void *array_userdata(void *smart_ptr) {
     s_meta_array *meta = get_smart_ptr_meta_array_(smart_ptr);
     return meta ? meta + 1 : NULL;
 }
-
-
-typedef struct {
-    enum pointer_kind kind;
-    f_destructor dtor;
-#ifndef NDEBUG
-    void *ptr;
-#endif /* !NDEBUG */
-} s_meta;
-
-typedef struct {
-    enum pointer_kind kind;
-    f_destructor dtor;
-#ifndef NDEBUG
-    void *ptr;
-#endif /* !NDEBUG */
-    volatile size_t ref_count;
-} s_meta_shared;
 
 static CSPTR_INLINE size_t align(size_t s) {
     return (s + (sizeof (char *) - 1)) & ~(sizeof (char *) - 1);
@@ -248,13 +245,13 @@ static CSPTR_INLINE size_t atomic_decrement(volatile size_t *count) {
 #endif
 }
 
-static CSPTR_PURE CSPTR_INLINE s_meta *get_smart_ptr_meta_(const void * const smart_ptr) {
+static CSPTR_PURE CSPTR_INLINE s_meta_header *get_smart_ptr_meta_(const void * const smart_ptr) {
     size_t *sz_ptr = (size_t *) smart_ptr - 1;
-    return (s_meta *) ((char *) sz_ptr - *sz_ptr);
+    return (s_meta_header *) ((char *) sz_ptr - *sz_ptr);
 }
 
 void *sref(void *ptr) {
-    s_meta *meta = get_smart_ptr_meta_(ptr);
+    s_meta_header *meta = get_smart_ptr_meta_(ptr);
     assert(meta->ptr == ptr);
     assert(meta->kind & SHARED);
     atomic_increment(&((s_meta_shared *) meta)->ref_count);
@@ -262,7 +259,7 @@ void *sref(void *ptr) {
 }
 
 void *smove_size(void *ptr, size_t size) {
-    s_meta *meta = get_smart_ptr_meta_(ptr);
+    s_meta_header *meta = get_smart_ptr_meta_(ptr);
     assert(meta->kind & UNIQUE);
 
     s_smalloc_args args;
@@ -302,7 +299,7 @@ CSPTR_INLINE static void *alloc_entry(size_t head, size_t size, size_t metasize)
 #endif /* !SMALLOC_FIXED_ALLOCATOR */
 }
 
-CSPTR_INLINE static void dealloc_entry(s_meta *meta, void *ptr) {
+CSPTR_INLINE static void dealloc_entry(s_meta_header *meta, void *ptr) {
     if (meta->dtor) {
         void * const userdata = get_smart_ptr_userdata(ptr);
         if (meta->kind & STATIC_ARRAY) {
@@ -322,7 +319,7 @@ CSPTR_INLINE static void dealloc_entry(s_meta *meta, void *ptr) {
 }
 
 static inline size_t get_meta_header_size_(enum pointer_kind kind) {
-    return kind & SHARED ? sizeof (s_meta_shared) : sizeof (s_meta);
+    return kind & SHARED ? sizeof (s_meta_shared) : sizeof (s_meta_header);
 }
 static inline size_t get_meta_array_size_(enum pointer_kind kind) {
     return kind & STATIC_ARRAY ? sizeof(s_meta_array) : 0;
@@ -366,7 +363,7 @@ static void *smalloc_impl_(const s_smalloc_args *args) {
     size_t * const sz_ptr = (size_t *) (userdata_ptr + aligned_userdata_size);
     *sz_ptr = total_meta_size + aligned_userdata_size;
 
-    *(s_meta*) raw_ptr = (s_meta) {
+    *(s_meta_header*) raw_ptr = (s_meta_header) {
         .kind = args->kind,
         .dtor = args->dtor,
 #ifndef NDEBUG
@@ -383,7 +380,7 @@ static void *smalloc_impl_(const s_smalloc_args *args) {
 static s_meta_array *get_smart_ptr_meta_array_(const void * const smart_ptr) {
     assert((size_t) smart_ptr == align((size_t) smart_ptr));
 
-    s_meta * const raw_ptr = get_smart_ptr_meta_(smart_ptr);
+    s_meta_header * const raw_ptr = get_smart_ptr_meta_(smart_ptr);
     assert(raw_ptr->ptr == smart_ptr);
     if (!(raw_ptr->kind & STATIC_ARRAY) ){
         return NULL;
@@ -397,7 +394,7 @@ CSPTR_INLINE
 void *get_smart_ptr_userdata(const void * const smart_ptr) {
     assert((size_t) smart_ptr == align((size_t) smart_ptr));
 
-    s_meta * const raw_ptr = get_smart_ptr_meta_(smart_ptr);
+    s_meta_header * const raw_ptr = get_smart_ptr_meta_(smart_ptr);
     assert(raw_ptr->ptr == smart_ptr);
 
     size_t header_size = get_meta_size_(raw_ptr->kind);
@@ -417,7 +414,7 @@ void sfree(void *smart_ptr) {
     if (!smart_ptr) return;
 
     assert((size_t) smart_ptr == align((size_t) smart_ptr));
-    s_meta *meta = get_smart_ptr_meta_(smart_ptr);
+    s_meta_header *meta = get_smart_ptr_meta_(smart_ptr);
     assert(meta->ptr == smart_ptr);
 
     if (meta->kind & SHARED && atomic_decrement(&((s_meta_shared *) meta)->ref_count))
