@@ -6,7 +6,7 @@
 static enum greatest_test_res
 assert_eq_array(int *arr1, int *arr2, size_t len) {
     for (size_t i = 0; i < len; ++i) {
-        ASSERT_EQ(arr1[i], arr2[i]);
+        ASSERT_EQ_FMT(arr1[i], arr2[i], "%d");
     }
     PASS();
 }
@@ -21,6 +21,8 @@ TEST weird_point(void) {
 
 TEST unique_uninited(void) {
     smart int *arr = unique_arr(int, ARRAY_SIZE);
+    ASSERT_EQ(0, static_array.length(arr));
+    ASSERT_EQ(ARRAY_SIZE, static_array.capacity(arr));
     CHECK_CALL(assert_valid_array(arr, ARRAY_SIZE, sizeof(int)));
     int ea[ARRAY_SIZE] = { 0 };
     CHECK_CALL(assert_eq_array(ea, arr, ARRAY_SIZE));
@@ -29,10 +31,12 @@ TEST unique_uninited(void) {
 
 TEST shared_inited(void) {
     int va[] = {1,2,3,4,5,6,7};
-    const size_t LEN = sizeof(va)/sizeof(va[0]);
-    smart int *arr = shared_arr(int, LEN, va);
-    CHECK_CALL(assert_valid_array(arr, LEN, sizeof(int)));
-    CHECK_CALL(assert_eq_array(va, arr, LEN));
+    const size_t len = LEN(va);
+    smart int *arr = shared_arr(int, len, va);
+    ASSERT_EQ(len, static_array.length(arr));
+    ASSERT_EQ(len, static_array.capacity(arr));
+    CHECK_CALL(assert_valid_array(arr, len, sizeof(int)));
+    CHECK_CALL(assert_eq_array(va, arr, len));
     ASSERT_EQ(NULL, get_smart_ptr_userdata(arr));
     PASS();
 }
@@ -49,16 +53,18 @@ TEST shared_inited_with_dtor(void) {
         ++dtor_run;
     });
     int va[] = {5, 4, 3, 2, 1};
-    const size_t LEN = sizeof(va) / sizeof(va[0]);
-    int *ints = shared_arr(int, LEN, va, arrary_element_dtor);
-    CHECK_CALL(assert_valid_array(ints, LEN, sizeof(int)));
-    CHECK_CALL(assert_eq_array(va, ints, LEN));
+    const size_t len = LEN(va);
+    int *ints = shared_arr(int, len, va, arrary_element_dtor);
+    ASSERT_EQ(len, static_array.length(ints));
+    ASSERT_EQ(len, static_array.capacity(ints));
+    CHECK_CALL(assert_valid_array(ints, len, sizeof(int)));
+    CHECK_CALL(assert_eq_array(va, ints, len));
 
     sfree(ints);
-    ASSERT_EQ_FMTm("Expected every array-element be destroyed", LEN, dtor_run, "%zu");
+    ASSERT_EQ_FMTm("Expected every array-element be destroyed", len, dtor_run, "%zu");
 
     int expected = 0;
-    for (size_t i=0; i < LEN; ++i) expected += va[i];
+    for (size_t i=0; i < len; ++i) expected += va[i];
     ASSERT_EQ(expected, sum);
     PASS();
 }
@@ -75,13 +81,15 @@ TEST unique_uninited_with_userdata_and_dtor(void) {
 
     int *ints = unique_arr(int, ARRAY_SIZE, .dtor=dtor, .userdata={ &g_metadata, sizeof(g_metadata) });
     CHECK_CALL(assert_valid_array(ints, ARRAY_SIZE, sizeof(int)));
+    ASSERT_EQ(0, static_array.length(ints));
+    ASSERT_EQ(ARRAY_SIZE, static_array.capacity(ints));
     int va[ARRAY_SIZE]  = { 0 };
     CHECK_CALL(assert_eq_array(va, ints, ARRAY_SIZE));
     CHECK_CALL(assert_valid_meta(&g_metadata, array_userdata(ints)));
 
     sfree(ints);
     ASSERT_EQm("Expected uninit-array set 0", 0, sum);
-    ASSERT_EQm("Expected destructor to run", ARRAY_SIZE, dtor_run);
+    ASSERT_EQm("Expected destructor to run", 0, dtor_run);
     PASS();
 }
 
@@ -96,17 +104,19 @@ TEST unique_inited_with_userdata_and_dtor(void) {
     });
 
     int va[] = {1, 3, 5, 7, 9, 11};
-    const size_t LEN = sizeof(va) / sizeof(va[0]);
-    int *ints = unique_arr(int, LEN, va, .dtor=dtor, .userdata={ &g_metadata, sizeof(g_metadata) });
-    CHECK_CALL(assert_valid_array(ints, LEN, sizeof(int)));
-    CHECK_CALL(assert_eq_array(va, ints, LEN));
+    const size_t len = LEN(va);
+    int *ints = unique_arr(int, len, va, .dtor=dtor, .userdata={ &g_metadata, sizeof(g_metadata) });
+    ASSERT_EQ_FMT(len, static_array.length(ints), "%zu");
+    ASSERT_EQ(len, static_array.capacity(ints));
+    CHECK_CALL(assert_valid_array(ints, len, sizeof(int)));
+    CHECK_CALL(assert_eq_array(va, ints, len));
     CHECK_CALL(assert_valid_meta(&g_metadata, array_userdata(ints)));
 
     sfree(ints);
     int s = 0;
-    for (size_t i = 0; i < LEN; ++i) s += va[i];
+    for (size_t i = 0; i < len; ++i) s += va[i];
     ASSERT_EQm("Expected array sum", s, sum);
-    ASSERT_EQm("Expected destructor to run", LEN, dtor_run);
+    ASSERT_EQm("Expected destructor to run", len, dtor_run);
     PASS();
 }
 
@@ -121,6 +131,8 @@ TEST shared_uninited_with_userdata_and_dtor(void) {
     });
 
     int *arr = shared_arr(int, ARRAY_SIZE, .dtor=dtor, .userdata={ &g_metadata, sizeof(g_metadata) });
+    ASSERT_EQ(0, static_array.length(arr));
+    ASSERT_EQ(ARRAY_SIZE, static_array.capacity(arr));
     CHECK_CALL(assert_valid_array(arr, ARRAY_SIZE, sizeof(int)));
     CHECK_CALL(assert_valid_meta(&g_metadata, array_userdata(arr)));
 
@@ -133,7 +145,7 @@ TEST shared_uninited_with_userdata_and_dtor(void) {
     ASSERT_EQ(0, dtor_run);
     sfree(arr);
     ASSERT_EQm("Expected array sum", 0, sum);
-    ASSERT_EQm("Expected destructor to run", ARRAY_SIZE, dtor_run);
+    ASSERT_EQm("Expected destructor to run", 0, dtor_run);
     PASS();
 }
 
@@ -148,25 +160,27 @@ TEST shared_inited_with_userdata_and_dtor(void) {
     });
 
     int ARR[] = {1, 3, 5, 7, 9, 11};
-    const size_t LEN = sizeof(ARR)/sizeof(ARR[0]);
-    int *arr = shared_arr(int, LEN, ARR, .dtor=dtor, .userdata={ &g_metadata, sizeof(g_metadata) });
-    CHECK_CALL(assert_valid_array(arr, LEN, sizeof(int)));
-    CHECK_CALL(assert_eq_array(ARR, arr, LEN));
+    const size_t len = LEN(ARR);
+    int *arr = shared_arr(int, len, ARR, .dtor=dtor, .userdata={ &g_metadata, sizeof(g_metadata) });
+    ASSERT_EQ(len, static_array.length(arr));
+    ASSERT_EQ(len, static_array.capacity(arr));
+    CHECK_CALL(assert_valid_array(arr, len, sizeof(int)));
+    CHECK_CALL(assert_eq_array(ARR, arr, len));
     CHECK_CALL(assert_valid_meta(&g_metadata, array_userdata(arr)));
 
     {
         autoclean int* ptr = sref(arr);
-        CHECK_CALL(assert_valid_array(ptr, LEN, sizeof(int)));
-        CHECK_CALL(assert_eq_array(ARR, ptr, LEN));
+        CHECK_CALL(assert_valid_array(ptr, len, sizeof(int)));
+        CHECK_CALL(assert_eq_array(ARR, ptr, len));
         CHECK_CALL(assert_valid_meta(&g_metadata, array_userdata(ptr)));
         ASSERT_EQ(0, dtor_run);
     }
     ASSERT_EQ(0, dtor_run);
     sfree(arr);
     int s = 0;
-    for (size_t i = 0; i < LEN; ++i) s += ARR[i];
+    for (size_t i = 0; i < len; ++i) s += ARR[i];
     ASSERT_EQm("Expected array-item-destructor to run, by sum array", s, sum);
-    ASSERT_EQm("Expected array-item-destructor to run", LEN, dtor_run);
+    ASSERT_EQm("Expected array-item-destructor to run", len, dtor_run);
     PASS();
 }
 

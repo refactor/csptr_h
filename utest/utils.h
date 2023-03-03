@@ -23,7 +23,8 @@ static enum greatest_test_res
 assert_valid_array(void *ptr, size_t expected_cap, size_t element_size) {
     ASSERT_EQ_FMTm("Mismatching array lengths.", expected_cap, static_array.capacity(ptr), "%zu");
     ASSERT_EQ_FMTm("Mismatching compound type sizes.", element_size, static_array.item_size(ptr), "%zu");
-    ASSERT_EQ_FMTm("Mismatching array sizes.", element_size * expected_cap, static_array.total_size(ptr), "%zu");
+    size_t total_size = static_array.item_size(ptr) * static_array.capacity(ptr);
+    ASSERT_EQ_FMTm("Mismatching array sizes.", element_size * expected_cap, total_size, "%zu");
     PASS();
 }
 
@@ -63,4 +64,5 @@ assert_valid_meta_with_ASSERT_OR_LONGJMP(const struct my_userdata *m1, const str
 #define lambda(RType, Body) ({ RType __fn__ Body; __fn__; })
 #define UNUSED __attribute__ ((unused))
 
+#define LEN(A) (sizeof(A)/sizeof(A[0]))
 
