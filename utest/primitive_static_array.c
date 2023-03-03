@@ -85,7 +85,7 @@ TEST unique_uninited_with_userdata_and_dtor(void) {
     ASSERT_EQ(ARRAY_SIZE, static_array.capacity(ints));
     int va[ARRAY_SIZE]  = { 0 };
     CHECK_CALL(assert_eq_array(va, ints, ARRAY_SIZE));
-    CHECK_CALL(assert_valid_meta(&g_metadata, array_userdata(ints)));
+    CHECK_CALL(assert_valid_meta(&g_metadata, get_smart_ptr_userdata(ints)));
 
     sfree(ints);
     ASSERT_EQm("Expected uninit-array set 0", 0, sum);
@@ -110,7 +110,7 @@ TEST unique_inited_with_userdata_and_dtor(void) {
     ASSERT_EQ(len, static_array.capacity(ints));
     CHECK_CALL(assert_valid_array(ints, len, sizeof(int)));
     CHECK_CALL(assert_eq_array(va, ints, len));
-    CHECK_CALL(assert_valid_meta(&g_metadata, array_userdata(ints)));
+    CHECK_CALL(assert_valid_meta(&g_metadata, get_smart_ptr_userdata(ints)));
 
     sfree(ints);
     int s = 0;
@@ -134,12 +134,12 @@ TEST shared_uninited_with_userdata_and_dtor(void) {
     ASSERT_EQ(0, static_array.length(arr));
     ASSERT_EQ(ARRAY_SIZE, static_array.capacity(arr));
     CHECK_CALL(assert_valid_array(arr, ARRAY_SIZE, sizeof(int)));
-    CHECK_CALL(assert_valid_meta(&g_metadata, array_userdata(arr)));
+    CHECK_CALL(assert_valid_meta(&g_metadata, get_smart_ptr_userdata(arr)));
 
     {
         autoclean int* ptr = sref(arr);
         CHECK_CALL(assert_valid_array(ptr, ARRAY_SIZE, sizeof(int)));
-        CHECK_CALL(assert_valid_meta(&g_metadata, array_userdata(ptr)));
+        CHECK_CALL(assert_valid_meta(&g_metadata, get_smart_ptr_userdata(ptr)));
         ASSERT_EQ(0, dtor_run);
     }
     ASSERT_EQ(0, dtor_run);
@@ -166,13 +166,13 @@ TEST shared_inited_with_userdata_and_dtor(void) {
     ASSERT_EQ(len, static_array.capacity(arr));
     CHECK_CALL(assert_valid_array(arr, len, sizeof(int)));
     CHECK_CALL(assert_eq_array(ARR, arr, len));
-    CHECK_CALL(assert_valid_meta(&g_metadata, array_userdata(arr)));
+    CHECK_CALL(assert_valid_meta(&g_metadata, get_smart_ptr_userdata(arr)));
 
     {
         autoclean int* ptr = sref(arr);
         CHECK_CALL(assert_valid_array(ptr, len, sizeof(int)));
         CHECK_CALL(assert_eq_array(ARR, ptr, len));
-        CHECK_CALL(assert_valid_meta(&g_metadata, array_userdata(ptr)));
+        CHECK_CALL(assert_valid_meta(&g_metadata, get_smart_ptr_userdata(ptr)));
         ASSERT_EQ(0, dtor_run);
     }
     ASSERT_EQ(0, dtor_run);
@@ -190,6 +190,13 @@ TEST zero_array(void) {
     PASS();
 }
 
+TEST append(void) {
+    smart int *arr = shared_arr(int, 3);
+    ASSERT_EQ(3, static_array.capacity(arr));
+    ASSERT_EQ(0, static_array.length(arr));
+    PASS();
+}
+
 GREATEST_SUITE(primitive_static_array) {
     RUN_TEST(weird_point);
     RUN_TEST(unique_uninited);
@@ -200,5 +207,6 @@ GREATEST_SUITE(primitive_static_array) {
     RUN_TEST(unique_inited_with_userdata_and_dtor);
     RUN_TEST(shared_uninited_with_userdata_and_dtor);
     RUN_TEST(shared_inited_with_userdata_and_dtor);
+    RUN_TEST(append);
 }
 

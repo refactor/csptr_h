@@ -78,8 +78,8 @@ TEST unique_inited_with_userdata(void) {
     CHECK_CALL(assert_eq_array(as, arr, LEN(as)));
 
     CHECK_CALL(assert_valid_array(arr, LEN(as), sizeof(struct anim)));
-    CHECK_CALL(assert_valid_meta(&g_metadata, array_userdata(arr)));
-    ASSERT_NEQ(&g_metadata, array_userdata(arr));
+    CHECK_CALL(assert_valid_meta(&g_metadata, get_smart_ptr_userdata(arr)));
+    ASSERT_NEQ(&g_metadata, get_smart_ptr_userdata(arr));
     PASS();
 }
 
@@ -97,8 +97,8 @@ TEST unique_inited_with_userdata_and_dtor(void) {
     CHECK_CALL(assert_eq_array(as, arr, LEN(as)));
 
     CHECK_CALL(assert_valid_array(arr, LEN(as), sizeof(struct anim)));
-    CHECK_CALL(assert_valid_meta(&g_metadata, array_userdata(arr)));
-    ASSERT_NEQ(&g_metadata, array_userdata(arr));
+    CHECK_CALL(assert_valid_meta(&g_metadata, get_smart_ptr_userdata(arr)));
+    ASSERT_NEQ(&g_metadata, get_smart_ptr_userdata(arr));
 
     sfree(arr);
     ASSERT_EQm("Expected destructor to run", LEN(as), dtor_run);
@@ -119,8 +119,8 @@ TEST shared_inited_with_userdata_and_dtor(void) {
     CHECK_CALL(assert_eq_array(as, arr, LEN(as)));
 
     CHECK_CALL(assert_valid_array(arr, LEN(as), sizeof(struct anim)));
-    CHECK_CALL(assert_valid_meta(&g_metadata, array_userdata(arr)));
-    ASSERT_NEQ(&g_metadata, array_userdata(arr));
+    CHECK_CALL(assert_valid_meta(&g_metadata, get_smart_ptr_userdata(arr)));
+    ASSERT_NEQ(&g_metadata, get_smart_ptr_userdata(arr));
     {
         autoclean anim* arr2 = sref(arr);
         autoclean anim* arr3 = sref(arr);
@@ -157,8 +157,8 @@ TEST unique_uninited_with_userdata_and_dtor(void) {
 //    CHECK_CALL(assert_eq_array(as, arr, LEN(as)));
 
     CHECK_CALL(assert_valid_array(arr, len, sizeof(struct anim)));
-    CHECK_CALL(assert_valid_meta(&g_metadata, array_userdata(arr)));
-    ASSERT_NEQ(&g_metadata, array_userdata(arr));
+    CHECK_CALL(assert_valid_meta(&g_metadata, get_smart_ptr_userdata(arr)));
+    ASSERT_NEQ(&g_metadata, get_smart_ptr_userdata(arr));
 
     sfree(arr);
     ASSERT_EQm("Expected destructor to run", 0, dtor_run);
@@ -189,8 +189,8 @@ TEST shared_uninited_with_userdata_and_dtor(void) {
                 ASSERT_EQ(0, static_array.length(arr5));
 
                 CHECK_CALL(assert_valid_array(arr5, len, sizeof(struct anim)));
-                CHECK_CALL(assert_valid_meta(&g_metadata, array_userdata(arr5)));
-                ASSERT_NEQ(&g_metadata, array_userdata(arr5));
+                CHECK_CALL(assert_valid_meta(&g_metadata, get_smart_ptr_userdata(arr5)));
+                ASSERT_NEQ(&g_metadata, get_smart_ptr_userdata(arr5));
                 ASSERT_EQm("Expected destructor to run", 0, dtor_run);
             }
             ASSERT_EQm("Expected destructor to run", 0, dtor_run);
@@ -199,8 +199,8 @@ TEST shared_uninited_with_userdata_and_dtor(void) {
     }
     ASSERT_EQm("Expected destructor to run", 0, dtor_run);
     CHECK_CALL(assert_valid_array(arr, len, sizeof(struct anim)));
-    CHECK_CALL(assert_valid_meta(&g_metadata, array_userdata(arr)));
-    ASSERT_NEQ(&g_metadata, array_userdata(arr));
+    CHECK_CALL(assert_valid_meta(&g_metadata, get_smart_ptr_userdata(arr)));
+    ASSERT_NEQ(&g_metadata, get_smart_ptr_userdata(arr));
 
     sfree(arr);
     ASSERT_EQm("Expected destructor to run", 0, dtor_run);

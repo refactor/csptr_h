@@ -155,14 +155,11 @@ struct smt_static_array_ns {
     size_t (*capacity)(const void* smart_arr);
     size_t (*length)(const void* smart_arr);
     size_t (*item_size)(const void* smart_arr);
+    void* (*userdata)(const void* const smart_arr);
 };
 
 extern const struct smt_static_array_ns static_array;
 extern const struct smt_dynamic_array_ns dynamic_array;
-
-
-
-CSPTR_PURE void *array_userdata(void *ptr);
 
 
 #endif //MY_LIBCSPTR_H
@@ -212,13 +209,10 @@ static size_t array_capacity_(const void *smart_ptr) {
 const struct smt_static_array_ns static_array = {
         .length = array_length_,
         .item_size = array_item_size_,
-        .capacity = array_capacity_
+        .capacity = array_capacity_,
+        .userdata = get_smart_ptr_userdata
 };
 
-CSPTR_PURE CSPTR_INLINE void *array_userdata(void *smart_ptr) {
-    s_meta_array *meta = get_smart_ptr_meta_array_(smart_ptr);
-    return meta ? meta + 1 : NULL;
-}
 
 static CSPTR_INLINE size_t align(size_t s) {
     return (s + (sizeof (char *) - 1)) & ~(sizeof (char *) - 1);
@@ -414,7 +408,7 @@ static s_meta_array *get_smart_ptr_meta_array_(const void * const smart_ptr) {
     return ma;
 }
 
-CSPTR_INLINE
+CSPTR_PURE
 void *get_smart_ptr_userdata(const void * const smart_ptr) {
     assert((size_t) smart_ptr == align((size_t) smart_ptr));
 
