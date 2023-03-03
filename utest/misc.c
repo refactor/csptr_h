@@ -36,7 +36,7 @@ TEST alloc_failure(void) {
     };
     smart void *ptr = unique_ptr(int, 42);
     ASSERT_EQm("Expected NULL pointer to be returned.", NULL, ptr);
-    smalloc_allocator = (s_allocator){malloc, free};
+    smalloc_allocator = (s_allocator){malloc, free, realloc};
     PASS();
 }
 #endif

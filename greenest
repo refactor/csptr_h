@@ -23,6 +23,7 @@ BEGIN {
 /^PASS/ { sub("PASS", GREEN "PASS" RESET) }
 /^SKIP/ { sub("SKIP", YELLOW "SKIP" RESET) }
 /^FAIL/ { sub("FAIL", RED "FAIL" RESET) }
+/, fail: / { sub("fail", RED "fail" RESET) }
 
 # highlight hexdump difference markers
 /^[0-9a-f]/ {

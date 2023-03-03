@@ -191,9 +191,18 @@ TEST zero_array(void) {
 }
 
 TEST append(void) {
-    smart int *arr = shared_arr(int, 3);
-    ASSERT_EQ(3, static_array.capacity(arr));
-    ASSERT_EQ(0, static_array.length(arr));
+    {
+        smart int *a = shared_arr(int, 5);
+        ASSERT_EQ(5, static_array.capacity(a));
+        ASSERT_EQ(0, static_array.length(a));
+
+        int A[] = {1, 3, 5, 7, 9, 2, 4, 6, 8, 10, 11};
+        const size_t len = LEN(A);
+        for (uint32_t i = 0; i < len; ++i) {
+            arrappend(a, A[i]);
+            printf("arr: capacity=%zu, length=%zu, A[%u/%zu]=%d, a[%u]=%d\n", static_array.capacity(a), static_array.length(a), i, len, A[i], i, a[i]);
+        }
+    }
     PASS();
 }
 

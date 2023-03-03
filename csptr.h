@@ -49,6 +49,7 @@ typedef void (*f_destructor)(void *, void *);
 typedef struct {
     void *(*alloc)(size_t);
     void (*dealloc)(void *);
+    void *(*realloc)(void*, size_t);
 } s_allocator;
 
 extern s_allocator smalloc_allocator;
@@ -151,6 +152,13 @@ CSPTR_INLINE void sfree_stack(void *ptr) {
 # define shared_arr(Type, Length, ...) smart_arr(SHARED, Type, Length, __VA_ARGS__)
 # define unique_arr(Type, Length, ...) smart_arr(UNIQUE, Type, Length, __VA_ARGS__)
 
+#define arrappend smt_sa_arrappend
+#define smt_sa_arrappend(a,v) (smt_sa_arrmaybegrow(a,1), (a)[get_smart_ptr_meta_array_(a)->item_num++] = (v))
+
+#define smt_sa_arrmaybegrow(a,n)  ((!(a) || get_smart_ptr_meta_array_(a)->item_num + (n) > get_smart_ptr_meta_array_(a)->item_capacity) \
+                                  ? (smt_arrgrow(a,n,0),0) : 0)
+#define smt_arrgrow(a,b,c)   ((a) = stbds_arrgrowf((a), (b), (c)))
+
 struct smt_static_array_ns {
     size_t (*capacity)(const void* smart_arr);
     size_t (*length)(const void* smart_arr);
@@ -161,7 +169,14 @@ struct smt_static_array_ns {
 extern const struct smt_static_array_ns static_array;
 extern const struct smt_dynamic_array_ns dynamic_array;
 
+typedef struct {
+    size_t item_num;
+    size_t item_size;
+    size_t item_capacity;
+} s_meta_array;
 
+extern s_meta_array *get_smart_ptr_meta_array_(const void * const smart_ptr);
+extern void * stbds_arrgrowf(void *a, size_t addlen, size_t min_cap);
 #endif //MY_LIBCSPTR_H
 
 #ifdef MY_LIBCSPTR_IMPLEMENTATION
@@ -179,14 +194,13 @@ typedef struct {
     volatile size_t ref_count;
 } s_meta_shared;
 
-typedef struct {
-    size_t item_num;
-    size_t item_size;
-    size_t item_capacity;
-} s_meta_array;
+static CSPTR_PURE CSPTR_INLINE s_meta_header *get_smart_ptr_meta_(const void * const smart_ptr) {
+    size_t *sz_ptr = (size_t *) smart_ptr - 1;
+    return (s_meta_header *) ((char *) sz_ptr - *sz_ptr);
+}
 
 CSPTR_PURE
-static s_meta_array *get_smart_ptr_meta_array_(const void * const smart_ptr);
+s_meta_array *get_smart_ptr_meta_array_(const void * const smart_ptr);
 
 CSPTR_PURE
 static size_t array_length_(const void *smart_ptr) {
@@ -213,12 +227,44 @@ const struct smt_static_array_ns static_array = {
         .userdata = get_smart_ptr_userdata
 };
 
+static size_t get_smart_ptr_total_meta_sz_(const void* smart_ptr) {
+    return (char*)smart_ptr - ((char*)get_smart_ptr_meta_(smart_ptr));
+}
+
+void *stbds_arrgrowf(void *a, size_t addlen, size_t min_cap) {
+    (void )min_cap;
+    size_t elemsize = array_item_size_(a);
+    size_t min_len = array_length_(a) + addlen;
+    // compute the minimum capacity needed
+    if (min_len > min_cap)
+        min_cap = min_len;
+    if (min_cap <= array_capacity_(a))
+        return a;
+
+    // increase needed capacity to guarantee O(1) amortized
+    if (min_cap < 2 * array_capacity_(a))
+        min_cap = 2 * array_capacity_(a);
+    else if (min_cap < 4)
+        min_cap = 4;
+
+    s_meta_header* raw_a = get_smart_ptr_meta_(a);
+    size_t total_head_meta_userdata_sz = get_smart_ptr_total_meta_sz_(a);
+    // TODO: align memory check
+    void* raw_b = smalloc_allocator.realloc(raw_a, elemsize * min_cap + total_head_meta_userdata_sz);
+    void* b = (char*)raw_b + total_head_meta_userdata_sz;
+#ifndef NDEBUG
+    get_smart_ptr_meta_(b)->ptr = b;
+#endif
+    get_smart_ptr_meta_array_(b)->item_capacity = min_cap;
+    return b;
+}
+
 
 static CSPTR_INLINE size_t align(size_t s) {
     return (s + (sizeof (char *) - 1)) & ~(sizeof (char *) - 1);
 }
 
-s_allocator smalloc_allocator = {malloc, free};
+s_allocator smalloc_allocator = {malloc, free, realloc};
 
 #ifdef _MSC_VER
 # include <windows.h>
@@ -252,11 +298,6 @@ static CSPTR_INLINE size_t atomic_decrement(volatile size_t *count) {
 #else
     return atomic_add(count, 0, -1);
 #endif
-}
-
-static CSPTR_PURE CSPTR_INLINE s_meta_header *get_smart_ptr_meta_(const void * const smart_ptr) {
-    size_t *sz_ptr = (size_t *) smart_ptr - 1;
-    return (s_meta_header *) ((char *) sz_ptr - *sz_ptr);
 }
 
 void *sref(void *ptr) {
@@ -395,7 +436,7 @@ static void *smalloc_impl_(const s_smalloc_args *args) {
     return sz_ptr + 1;
 }
 
-static s_meta_array *get_smart_ptr_meta_array_(const void * const smart_ptr) {
+s_meta_array *get_smart_ptr_meta_array_(const void * const smart_ptr) {
     assert((size_t) smart_ptr == align((size_t) smart_ptr));
 
     s_meta_header * const raw_ptr = get_smart_ptr_meta_(smart_ptr);
