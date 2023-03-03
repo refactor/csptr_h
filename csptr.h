@@ -152,7 +152,6 @@ struct smt_static_array_ns {
     size_t (*capacity)(const void* smart_arr);
     size_t (*length)(const void* smart_arr);
     size_t (*item_size)(const void* smart_arr);
-    size_t (*total_size)(const void* smart_arr);
 };
 
 extern const struct smt_static_array_ns static_array;
@@ -181,8 +180,8 @@ typedef struct {
 } s_meta_shared;
 
 typedef struct {
-    size_t itemnum;
-    size_t itemsize;
+    size_t item_num;
+    size_t item_size;
     size_t item_capacity;
 } s_meta_array;
 
@@ -190,21 +189,15 @@ CSPTR_PURE
 static s_meta_array *get_smart_ptr_meta_array_(const void * const smart_ptr);
 
 CSPTR_PURE
-static size_t array_length(const void *smart_ptr) {
+static size_t array_length_(const void *smart_ptr) {
     s_meta_array *meta = get_smart_ptr_meta_array_(smart_ptr);
-    return meta ? meta->itemnum : 1;  // TODO: instead of 1, it should be real array length
+    return meta ? meta->item_num : 1;  // TODO: instead of 1, it should be real array length
 }
 
 CSPTR_PURE
-static size_t array_item_size(const void *smart_ptr) {
+static size_t array_item_size_(const void *smart_ptr) {
     s_meta_array *meta = get_smart_ptr_meta_array_(smart_ptr);
-    return meta ? meta->itemsize : 0;
-}
-
-CSPTR_PURE
-static size_t array_size(const void *smart_ptr) {
-    s_meta_array *meta = get_smart_ptr_meta_array_(smart_ptr);
-    return meta ? meta->itemsize * meta->itemnum : 0;
+    return meta ? meta->item_size : 0;
 }
 
 CSPTR_PURE
@@ -214,9 +207,8 @@ static size_t array_capacity_(const void *smart_ptr) {
 }
 
 const struct smt_static_array_ns static_array = {
-        .length = array_length,
-        .item_size = array_item_size,
-        .total_size = array_size,
+        .length = array_length_,
+        .item_size = array_item_size_,
         .capacity = array_capacity_
 };
 
@@ -288,8 +280,8 @@ void *smove_size(void *ptr, size_t size) {
     if (meta->kind & STATIC_ARRAY) {
         s_meta_array *arr_meta = get_smart_ptr_meta_array_(ptr);
         args = (s_smalloc_args) {
-            .item_size = arr_meta->itemsize,
-            .item_num = arr_meta->itemnum,
+            .item_size = arr_meta->item_size,
+            .item_num = arr_meta->item_num,
             .kind = (enum pointer_kind) (SHARED | STATIC_ARRAY),
             .dtor = meta->dtor,
             .userdata = { arr_meta, *metasize },
@@ -324,8 +316,8 @@ CSPTR_INLINE static void dealloc_entry(s_meta_header *meta, void *ptr) {
         void * const userdata = get_smart_ptr_userdata(ptr);
         if (meta->kind & STATIC_ARRAY) {
             s_meta_array *arr_meta = get_smart_ptr_meta_array_(ptr);//(void *) (meta + 1);
-            for (size_t i = 0; i < arr_meta->itemnum; ++i)
-                meta->dtor((char *) ptr + arr_meta->itemsize * i, userdata);
+            for (size_t i = 0; i < arr_meta->item_num; ++i)
+                meta->dtor((char *) ptr + arr_meta->item_size * i, userdata);
         }
         else
             meta->dtor(ptr, userdata);
@@ -384,8 +376,8 @@ static void *smalloc_impl_(const s_smalloc_args *args) {
         s_meta_array *meta_array = get_ptr_meta_array_(raw_ptr, args->kind);
         *meta_array = (s_meta_array) {
                 .item_capacity = args->item_num,
-                .itemnum = args->item_num,
-                .itemsize = args->item_size
+                .item_num = args->item_num,
+                .item_size = args->item_size
         };
     }
 
