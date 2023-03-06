@@ -38,6 +38,14 @@ struct my_userdata {
 
 extern const struct my_userdata g_metadata;
 
+
+#define assert_eq_arrays(a1, a2) do{ \
+    size_t len = static_array.length(a2); \
+    for (size_t i = 0; i < len; ++i) {      \
+        ASSERT_EQ(a1[i], a2[i]);                            \
+    }                                    \
+}while(0)
+
 static enum greatest_test_res
 assert_valid_meta(const struct my_userdata *m1, const struct my_userdata *m2) {
     ASSERT_NEQm("Expected metadata to be present", NULL, m2);

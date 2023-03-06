@@ -32,7 +32,8 @@ TEST null_ptr(void) {
 TEST alloc_failure(void) {
     smalloc_allocator = (s_allocator) {
         lambda(void*, (UNUSED size_t s) { return NULL; }),
-        lambda(void, (UNUSED void *ptr) {})
+        lambda(void, (UNUSED void *ptr) {}),
+        lambda(void*, (UNUSED void* p, UNUSED size_t sz) {return NULL; })
     };
     smart void *ptr = unique_ptr(int, 42);
     ASSERT_EQm("Expected NULL pointer to be returned.", NULL, ptr);

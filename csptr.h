@@ -122,7 +122,7 @@ CSPTR_INLINE void sfree_stack(void *ptr) {
         enum pointer_kind akind = Kind | STATIC_ARRAY;                      \
         struct s_tmp {                                                      \
             CSPTR_SENTINEL_DEC                                              \
-            __typeof__(Type) *value;                                        \
+            const __typeof__(Type) *value;                                        \
             f_destructor dtor;                                              \
             struct {                                                        \
                 const void *ptr;                                            \
@@ -152,12 +152,26 @@ CSPTR_INLINE void sfree_stack(void *ptr) {
 # define shared_arr(Type, Length, ...) smart_arr(SHARED, Type, Length, __VA_ARGS__)
 # define unique_arr(Type, Length, ...) smart_arr(UNIQUE, Type, Length, __VA_ARGS__)
 
-#define arrappend smt_sa_arrappend
-#define smt_sa_arrappend(a,v) (smt_sa_arrmaybegrow(a,1), (a)[get_smart_ptr_meta_array_(a)->item_num++] = (v))
+#define arrappend smt__arrappend
+#define arrpop smt__arrpop
+#define arrdel smt__arrdel
+#define arrdeln smt__arrdeln
+#define arrins smt__arrins
+#define arrlast     smt__arrlast
 
-#define smt_sa_arrmaybegrow(a,n)  ((!(a) || get_smart_ptr_meta_array_(a)->item_num + (n) > get_smart_ptr_meta_array_(a)->item_capacity) \
-                                  ? (smt_arrgrow(a,n,0),0) : 0)
-#define smt_arrgrow(a,b,c)   ((a) = stbds_arrgrowf((a), (b), (c)))
+#define smt__arrappend(a,v) (smt__arrmaybegrow(a,1), (a)[get_smart_ptr_meta_array_(a)->item_num++] = (v))
+#define smt__arrpop(a) ((a)[--get_smart_ptr_meta_array_(a)->item_num])
+#define smt__arrdel(a,i) smt__arrdeln(a,i,1)
+#define smt__arrdeln(a,i,n)   (memmove(&(a)[i], &(a)[(i)+(n)], get_smart_ptr_meta_array_(a)->item_size * (get_smart_ptr_meta_array_(a)->item_num-(n)-(i))), get_smart_ptr_meta_array_(a)->item_num -= (n))
+#define smt__arrins(a,i,v)    (smt__arrinsn((a),(i),1), (a)[i]=(v))
+
+#define smt__arrmaybegrow(a,n)  ((!(a) || get_smart_ptr_meta_array_(a)->item_num + (n) > get_smart_ptr_meta_array_(a)->item_capacity) \
+                                  ? (smt__arrgrow(a,n,0),0) : 0)
+#define smt__arrgrow(a,b,c)   ((a) = smt__arrgrowf_((a), (b), (c)))
+
+#define smt__arrinsn(a,i,n)   (smt__arraddnindex((a),(n)), memmove(&(a)[(i)+(n)], &(a)[i], get_smart_ptr_meta_array_(a)->item_size * (get_smart_ptr_meta_array_(a)->item_num-(n)-(i))))
+#define smt__arraddnindex(a,n) (smt__arrmaybegrow(a,n), (n) ? (get_smart_ptr_meta_array_(a)->item_num += (n), get_smart_ptr_meta_array_(a)->item_num-(n)) : get_smart_ptr_meta_array_(a)->item_num)
+#define smt__arrlast(a)       ((a)[get_smart_ptr_meta_array_(a)->item_num-1])
 
 struct smt_static_array_ns {
     size_t (*capacity)(const void* smart_arr);
@@ -176,23 +190,23 @@ typedef struct {
 } s_meta_array;
 
 extern s_meta_array *get_smart_ptr_meta_array_(const void * const smart_ptr);
-extern void * stbds_arrgrowf(void *a, size_t addlen, size_t min_cap);
+extern void * smt__arrgrowf_(void *a, size_t addlen, size_t min_cap);
 #endif //MY_LIBCSPTR_H
 
 #ifdef MY_LIBCSPTR_IMPLEMENTATION
 
 typedef struct {
-    enum pointer_kind kind;
-    f_destructor dtor;
+    struct s_meta_header_s {
+        enum pointer_kind kind;
+        f_destructor dtor;
 #ifndef NDEBUG
-    void *ptr;
+        void *ptr;
 #endif /* !NDEBUG */
-} s_meta_header;
-
-typedef struct {
-    s_meta_header header;
+    } header;
     volatile size_t ref_count;
 } s_meta_shared;
+
+typedef struct s_meta_header_s s_meta_header;
 
 static CSPTR_PURE CSPTR_INLINE s_meta_header *get_smart_ptr_meta_(const void * const smart_ptr) {
     size_t *sz_ptr = (size_t *) smart_ptr - 1;
@@ -231,7 +245,7 @@ static size_t get_smart_ptr_total_meta_sz_(const void* smart_ptr) {
     return (char*)smart_ptr - ((char*)get_smart_ptr_meta_(smart_ptr));
 }
 
-void *stbds_arrgrowf(void *a, size_t addlen, size_t min_cap) {
+void *smt__arrgrowf_(void *a, size_t addlen, size_t min_cap) {
     (void )min_cap;
     size_t elemsize = array_item_size_(a);
     size_t min_len = array_length_(a) + addlen;

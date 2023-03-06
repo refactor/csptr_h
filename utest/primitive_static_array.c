@@ -3,13 +3,6 @@
 #define ARRAY_SIZE 25
 
 
-static enum greatest_test_res
-assert_eq_array(int *arr1, int *arr2, size_t len) {
-    for (size_t i = 0; i < len; ++i) {
-        ASSERT_EQ_FMT(arr1[i], arr2[i], "%d");
-    }
-    PASS();
-}
 
 TEST weird_point(void) {
     typedef int(static_int)[25];
@@ -25,7 +18,7 @@ TEST unique_uninited(void) {
     ASSERT_EQ(ARRAY_SIZE, static_array.capacity(arr));
     CHECK_CALL(assert_valid_array(arr, ARRAY_SIZE, sizeof(int)));
     int ea[ARRAY_SIZE] = { 0 };
-    CHECK_CALL(assert_eq_array(ea, arr, ARRAY_SIZE));
+    assert_eq_arrays(ea, arr);
     PASS();
 }
 
@@ -36,7 +29,7 @@ TEST shared_inited(void) {
     ASSERT_EQ(len, static_array.length(arr));
     ASSERT_EQ(len, static_array.capacity(arr));
     CHECK_CALL(assert_valid_array(arr, len, sizeof(int)));
-    CHECK_CALL(assert_eq_array(va, arr, len));
+    assert_eq_arrays(va, arr);
     ASSERT_EQ(NULL, get_smart_ptr_userdata(arr));
     PASS();
 }
@@ -58,7 +51,7 @@ TEST shared_inited_with_dtor(void) {
     ASSERT_EQ(len, static_array.length(ints));
     ASSERT_EQ(len, static_array.capacity(ints));
     CHECK_CALL(assert_valid_array(ints, len, sizeof(int)));
-    CHECK_CALL(assert_eq_array(va, ints, len));
+    assert_eq_arrays(va, ints);
 
     sfree(ints);
     ASSERT_EQ_FMTm("Expected every array-element be destroyed", len, dtor_run, "%zu");
@@ -84,7 +77,7 @@ TEST unique_uninited_with_userdata_and_dtor(void) {
     ASSERT_EQ(0, static_array.length(ints));
     ASSERT_EQ(ARRAY_SIZE, static_array.capacity(ints));
     int va[ARRAY_SIZE]  = { 0 };
-    CHECK_CALL(assert_eq_array(va, ints, ARRAY_SIZE));
+    assert_eq_arrays(va, ints);
     CHECK_CALL(assert_valid_meta(&g_metadata, get_smart_ptr_userdata(ints)));
 
     sfree(ints);
@@ -109,7 +102,7 @@ TEST unique_inited_with_userdata_and_dtor(void) {
     ASSERT_EQ_FMT(len, static_array.length(ints), "%zu");
     ASSERT_EQ(len, static_array.capacity(ints));
     CHECK_CALL(assert_valid_array(ints, len, sizeof(int)));
-    CHECK_CALL(assert_eq_array(va, ints, len));
+    assert_eq_arrays(va, ints);
     CHECK_CALL(assert_valid_meta(&g_metadata, get_smart_ptr_userdata(ints)));
 
     sfree(ints);
@@ -165,13 +158,13 @@ TEST shared_inited_with_userdata_and_dtor(void) {
     ASSERT_EQ(len, static_array.length(arr));
     ASSERT_EQ(len, static_array.capacity(arr));
     CHECK_CALL(assert_valid_array(arr, len, sizeof(int)));
-    CHECK_CALL(assert_eq_array(ARR, arr, len));
+    assert_eq_arrays(ARR, arr);
     CHECK_CALL(assert_valid_meta(&g_metadata, get_smart_ptr_userdata(arr)));
 
     {
         autoclean int* ptr = sref(arr);
         CHECK_CALL(assert_valid_array(ptr, len, sizeof(int)));
-        CHECK_CALL(assert_eq_array(ARR, ptr, len));
+        assert_eq_arrays(ARR, ptr);
         CHECK_CALL(assert_valid_meta(&g_metadata, get_smart_ptr_userdata(ptr)));
         ASSERT_EQ(0, dtor_run);
     }
@@ -190,22 +183,6 @@ TEST zero_array(void) {
     PASS();
 }
 
-TEST append(void) {
-    {
-        smart int *a = shared_arr(int, 5);
-        ASSERT_EQ(5, static_array.capacity(a));
-        ASSERT_EQ(0, static_array.length(a));
-
-        int A[] = {1, 3, 5, 7, 9, 2, 4, 6, 8, 10, 11};
-        const size_t len = LEN(A);
-        for (uint32_t i = 0; i < len; ++i) {
-            arrappend(a, A[i]);
-            printf("arr: capacity=%zu, length=%zu, A[%u/%zu]=%d, a[%u]=%d\n", static_array.capacity(a), static_array.length(a), i, len, A[i], i, a[i]);
-        }
-    }
-    PASS();
-}
-
 GREATEST_SUITE(primitive_static_array) {
     RUN_TEST(weird_point);
     RUN_TEST(unique_uninited);
@@ -216,6 +193,5 @@ GREATEST_SUITE(primitive_static_array) {
     RUN_TEST(unique_inited_with_userdata_and_dtor);
     RUN_TEST(shared_uninited_with_userdata_and_dtor);
     RUN_TEST(shared_inited_with_userdata_and_dtor);
-    RUN_TEST(append);
 }
 

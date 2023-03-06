@@ -10,7 +10,7 @@ SUITE_EXTERN(primitive_sptr);
 SUITE_EXTERN(struct_sptr);
 SUITE_EXTERN(primitive_static_array);
 SUITE_EXTERN(struct_static_array);
-
+SUITE_EXTERN(primitive_dynamic_array);
 
 GREATEST_MAIN_DEFS();
 
@@ -22,6 +22,7 @@ int main(int argc, char* argv[]) {
     RUN_SUITE(struct_sptr);
     RUN_SUITE(primitive_static_array);
     RUN_SUITE(struct_static_array);
+    RUN_SUITE(primitive_dynamic_array);
 
     GREATEST_MAIN_END();
 }

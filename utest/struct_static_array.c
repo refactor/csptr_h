@@ -154,7 +154,7 @@ TEST unique_uninited_with_userdata_and_dtor(void) {
     anim *arr = unique_arr(anim, len, .dtor=dtor, { &g_metadata, sizeof(g_metadata) });
     ASSERT_EQ(len, static_array.capacity(arr));
     ASSERT_EQ(0, static_array.length(arr));
-//    CHECK_CALL(assert_eq_array(as, arr, LEN(as)));
+//    CHECK_CALL(assert_eq_ints(as, arr, LEN(as)));
 
     CHECK_CALL(assert_valid_array(arr, len, sizeof(struct anim)));
     CHECK_CALL(assert_valid_meta(&g_metadata, get_smart_ptr_userdata(arr)));
