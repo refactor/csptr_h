@@ -152,6 +152,9 @@ CSPTR_INLINE void sfree_stack(void *ptr) {
 # define shared_arr(Type, Length, ...) smart_arr(SHARED, Type, Length, __VA_ARGS__)
 # define unique_arr(Type, Length, ...) smart_arr(UNIQUE, Type, Length, __VA_ARGS__)
 
+#define arrput smt__arrappend
+#define arrlenu(a) (!(a) ? 0 : static_array.length(a))
+
 #define arrappend smt__arrappend
 #define arrpop smt__arrpop
 #define arrdel smt__arrdel
@@ -464,9 +467,13 @@ static void *smalloc_impl_(const s_smalloc_args *args) {
 #endif
     };
 
-    if (args->kind & SHARED)
-        ((s_meta_shared*) raw_ptr)->ref_count = ATOMIC_VAR_INIT(1);
-
+    if (args->kind & SHARED) {
+#ifndef __STDC_NO_ATOMICS__
+        atomic_init(&((s_meta_shared *) raw_ptr)->ref_count, 1);
+#else
+        ((s_meta_shared*) raw_ptr)->ref_count = 1;
+#endif
+    }
     return sz_ptr + 1;
 }
 
