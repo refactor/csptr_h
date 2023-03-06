@@ -194,6 +194,9 @@ extern void * smt__arrgrowf_(void *a, size_t addlen, size_t min_cap);
 #endif //MY_LIBCSPTR_H
 
 #ifdef MY_LIBCSPTR_IMPLEMENTATION
+#ifndef __STDC_NO_ATOMICS__
+#include <stdatomic.h>
+#endif
 
 typedef struct {
     struct s_meta_header_s {
@@ -203,7 +206,11 @@ typedef struct {
         void *ptr;
 #endif /* !NDEBUG */
     } header;
-    volatile size_t ref_count;
+#ifndef __STDC_NO_ATOMICS__
+    volatile atomic_int ref_count;
+#else
+    volatile int32_t ref_count;
+#endif
 } s_meta_shared;
 
 typedef struct s_meta_header_s s_meta_header;
@@ -280,13 +287,14 @@ static CSPTR_INLINE size_t align(size_t s) {
 
 s_allocator smalloc_allocator = {malloc, free, realloc};
 
+#ifdef __STDC_NO_ATOMICS__
 #ifdef _MSC_VER
 # include <windows.h>
 # include <malloc.h>
 #endif
 
 #ifndef _MSC_VER
-static CSPTR_INLINE size_t atomic_add(volatile size_t *count, const size_t limit, const size_t val) {
+static CSPTR_INLINE int32_t atomic_add(volatile int32_t *count, const int32_t limit, const int32_t val) {
     size_t old_count, new_count;
     do {
       old_count = *count;
@@ -298,21 +306,33 @@ static CSPTR_INLINE size_t atomic_add(volatile size_t *count, const size_t limit
 }
 #endif
 
-static CSPTR_INLINE size_t atomic_increment(volatile size_t *count) {
+static CSPTR_INLINE int32_t atomic_increment(volatile int32_t *count) {
 #ifdef _MSC_VER
     return InterlockedIncrement64(count);
 #else
-    return atomic_add(count, SIZE_MAX, 1);
+    return atomic_add(count, INT32_MAX, 1);
 #endif
 }
 
-static CSPTR_INLINE size_t atomic_decrement(volatile size_t *count) {
+static CSPTR_INLINE int32_t atomic_decrement(volatile int32_t *count) {
 #ifdef _MSC_VER
     return InterlockedDecrement64(count);
 #else
     return atomic_add(count, 0, -1);
 #endif
 }
+
+#else
+
+static CSPTR_INLINE int32_t atomic_increment(volatile atomic_int *count) {
+    return atomic_fetch_add(count, 1) + 1;
+}
+
+static CSPTR_INLINE int32_t atomic_decrement(volatile atomic_int *count) {
+    return atomic_fetch_sub(count, 1) - 1;
+}
+
+#endif
 
 void *sref(void *ptr) {
     s_meta_header *meta = get_smart_ptr_meta_(ptr);
@@ -445,7 +465,7 @@ static void *smalloc_impl_(const s_smalloc_args *args) {
     };
 
     if (args->kind & SHARED)
-        ((s_meta_shared*) raw_ptr)->ref_count = 1;
+        ((s_meta_shared*) raw_ptr)->ref_count = ATOMIC_VAR_INIT(1);
 
     return sz_ptr + 1;
 }
