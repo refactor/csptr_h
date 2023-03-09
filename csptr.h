@@ -64,6 +64,7 @@ typedef struct {
         const void *data;
         size_t size;
     } userdata;
+    const void* value;
 } s_smalloc_args;
 
 CSPTR_PURE void *get_smart_ptr_userdata(const void * const smart_ptr);
@@ -109,13 +110,11 @@ CSPTR_INLINE void sfree_stack(void *ptr) {
             __VA_ARGS__                                                     \
         };                                                                  \
         const __typeof__(Type[1]) dummy;                                    \
-        void *var = sizeof (dummy[0]) == sizeof (dummy)                     \
-            ? smalloc(sizeof (Type), 1, 1, Kind, ARGS_)                     \
+        (__typeof__(Type)*)                                                 \
+        (sizeof (dummy[0]) == sizeof (dummy)                                \
+            ? smalloc(sizeof (Type), 1, 1, Kind, ARGS_, &args.value)        \
             : smalloc(sizeof (dummy[0]),                                    \
-                    sizeof (dummy) / sizeof (dummy[0]), 1, Kind, ARGS_);    \
-        if (var != NULL)                                                    \
-            memcpy(var, &args.value, sizeof (Type));                        \
-        (__typeof__(Type)*) var;                                            \
+                sizeof (dummy) / sizeof (dummy[0]), 1, Kind, ARGS_, &args.value));    \
     })
 
 # define smart_arr(Kind, Type, ArrLength, ...)                              \
@@ -133,17 +132,9 @@ CSPTR_INLINE void sfree_stack(void *ptr) {
             __VA_ARGS__                                                     \
         };                                                                  \
         const size_t Cap = ArrLength;                                       \
-        const size_t Len = (((args.value) == NULL) ? 0 : ArrLength);                \
-        void *var = smalloc(sizeof(Type), Cap, Len, (Kind | DYNAMIC_ARRAY), ARGS_); \
-        if (var != NULL) {                                                  \
-            if (args.value != NULL) {                                       \
-                memcpy(var, args.value, sizeof(Type) * Len);                \
-            }                                                               \
-            else {                                                          \
-                memset(var, 0, sizeof(Type) * Cap);                         \
-            }                                                               \
-        }                                                                   \
-        (__typeof__(Type)*) var;                                            \
+        const size_t Len = (((args.value) == NULL) ? 0 : ArrLength);        \
+        (__typeof__(Type)*)                                                 \
+        smalloc(sizeof(Type), Cap, Len, (Kind | DYNAMIC_ARRAY), ARGS_, args.value); \
     })
 
 # define shared_ptr(Type, ...) smart_ptr(SHARED, Type, __VA_ARGS__)
@@ -434,11 +425,11 @@ void *smalloc_impl_(const s_smalloc_args *args) {
 
     // align the sizes to the item_size of a word
     size_t aligned_userdata_size = align(args->userdata.size);
-    size_t rowdata_size = align(args->item_size * args->item_cap);
+    size_t rawdata_size = align(args->item_size * args->item_cap);
 
     const size_t total_meta_size = get_meta_size_(args->kind);
 
-    void *raw_ptr = alloc_entry(total_meta_size, rowdata_size, aligned_userdata_size);
+    void *raw_ptr = alloc_entry(total_meta_size, rawdata_size, aligned_userdata_size);
     if (raw_ptr == NULL)
         return NULL;
 
@@ -473,7 +464,15 @@ void *smalloc_impl_(const s_smalloc_args *args) {
         ((s_meta_shared*) raw_ptr)->ref_count = 1;
 #endif
     }
-    return sz_ptr + 1;
+    void* smart_ptr = sz_ptr + 1;
+
+    if (args->value != NULL) {
+        memcpy(smart_ptr, args->value, args->item_size * args->item_num);
+    }
+    else {
+        memset(smart_ptr, 0, args->item_size * args->item_cap);
+    }
+    return smart_ptr;
 }
 
 s_meta_array *get_smart_ptr_meta_array_(const void * const smart_ptr) {
