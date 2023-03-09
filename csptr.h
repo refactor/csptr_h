@@ -40,8 +40,7 @@ enum pointer_kind {
     UNIQUE = 1,
     SHARED = 2,
 
-    STATIC_ARRAY = 4,
-    DYNAMIC_ARRAY = 8
+    DYNAMIC_ARRAY = 4
 };
 
 typedef void (*f_destructor)(void *, void *);
@@ -69,12 +68,12 @@ typedef struct {
 
 CSPTR_PURE void *get_smart_ptr_userdata(const void * const smart_ptr);
 void *sref(void *ptr);
-CSPTR_MALLOC_API void *smalloc_(s_smalloc_args *args);
+CSPTR_MALLOC_API void *smalloc_impl_(const s_smalloc_args *args);
 void sfree(void *smart_ptr);
 void *smove_size(void *ptr, size_t size);
 
 #  define smalloc(...) \
-    smalloc_(&(s_smalloc_args) {CSPTR_SENTINEL __VA_ARGS__ })
+    smalloc_impl_(&(s_smalloc_args) {CSPTR_SENTINEL __VA_ARGS__ })
 
 #  define smove(Ptr) \
     smove_size((Ptr), sizeof (*(Ptr)))
@@ -90,6 +89,8 @@ CSPTR_INLINE void sfree_stack(void *ptr) {
 }
 
 # define ARGS_ args.dtor, { args.userdata.ptr, args.userdata.size }
+
+#define __MY_PASTE__(A,B) A##B
 
 # define autoclean __attribute__ ((cleanup(sfree_stack)))
 # define smart __attribute__ ((cleanup(sfree_stack)))
@@ -109,20 +110,19 @@ CSPTR_INLINE void sfree_stack(void *ptr) {
         };                                                                  \
         const __typeof__(Type[1]) dummy;                                    \
         void *var = sizeof (dummy[0]) == sizeof (dummy)                     \
-            ? smalloc(sizeof (Type), 1, 1, Kind, ARGS_)                        \
+            ? smalloc(sizeof (Type), 1, 1, Kind, ARGS_)                     \
             : smalloc(sizeof (dummy[0]),                                    \
-                    sizeof (dummy) / sizeof (dummy[0]), 1, Kind, ARGS_);       \
+                    sizeof (dummy) / sizeof (dummy[0]), 1, Kind, ARGS_);    \
         if (var != NULL)                                                    \
             memcpy(var, &args.value, sizeof (Type));                        \
         (__typeof__(Type)*) var;                                            \
     })
 
-# define smart_arr(Kind, Type, Length, ...)                                 \
+# define smart_arr(Kind, Type, ArrLength, ...)                              \
     ({                                                                      \
-        enum pointer_kind akind = Kind | STATIC_ARRAY;                      \
         struct s_tmp {                                                      \
             CSPTR_SENTINEL_DEC                                              \
-            const __typeof__(Type) *value;                                        \
+            const __typeof__(Type) *value;                                  \
             f_destructor dtor;                                              \
             struct {                                                        \
                 const void *ptr;                                            \
@@ -132,15 +132,15 @@ CSPTR_INLINE void sfree_stack(void *ptr) {
             CSPTR_SENTINEL                                                  \
             __VA_ARGS__                                                     \
         };                                                                  \
-        size_t Cap = Length;                                                \
-        size_t Len = (args.value == NULL) ? 0 : Length;                     \
-        void *var = smalloc(sizeof (Type), Cap,Len, akind, ARGS_);          \
+        const size_t Cap = ArrLength;                                       \
+        const size_t Len = (((args.value) == NULL) ? 0 : ArrLength);                \
+        void *var = smalloc(sizeof(Type), Cap, Len, (Kind | DYNAMIC_ARRAY), ARGS_); \
         if (var != NULL) {                                                  \
             if (args.value != NULL) {                                       \
-                memcpy(var, args.value, sizeof (Type) * Length);            \
+                memcpy(var, args.value, sizeof(Type) * Len);                \
             }                                                               \
             else {                                                          \
-                memset(var, 0, sizeof(Type) * Length);                      \
+                memset(var, 0, sizeof(Type) * Cap);                         \
             }                                                               \
         }                                                                   \
         (__typeof__(Type)*) var;                                            \
@@ -154,6 +154,7 @@ CSPTR_INLINE void sfree_stack(void *ptr) {
 
 #define arrput smt__arrappend
 #define arrlenu(a) (!(a) ? 0 : static_array.length(a))
+#define arrcap(a) (!(a) ? 0 : static_array.capacity(a))
 
 #define arrappend smt__arrappend
 #define arrpop smt__arrpop
@@ -352,14 +353,14 @@ void *smove_size(void *ptr, size_t size) {
     s_smalloc_args args;
 
     size_t *metasize = (size_t *) ptr - 1;
-    if (meta->kind & STATIC_ARRAY) {
+    if (meta->kind & DYNAMIC_ARRAY) {
         s_meta_array *arr_meta = get_smart_ptr_meta_array_(ptr);
         args = (s_smalloc_args) {
             .item_size = arr_meta->item_size,
             .item_cap = arr_meta->item_num,
-            .kind = (enum pointer_kind) (SHARED | STATIC_ARRAY),
+            .kind = (enum pointer_kind) (SHARED | DYNAMIC_ARRAY),
             .dtor = meta->dtor,
-            .userdata = { arr_meta, *metasize },
+            .userdata = { arr_meta, *metasize },    // TODO: Fix it
         };
     } else {
         void *userdata = get_smart_ptr_userdata(ptr);
@@ -371,7 +372,7 @@ void *smove_size(void *ptr, size_t size) {
         };
     }
 
-    void *newptr = smalloc_(&args);
+    void *newptr = smalloc_impl_(&args);
     memcpy(newptr, ptr, size);
     return newptr;
 }
@@ -389,7 +390,7 @@ CSPTR_INLINE static void *alloc_entry(size_t head, size_t size, size_t metasize)
 CSPTR_INLINE static void dealloc_entry(s_meta_header *meta, void *ptr) {
     if (meta->dtor) {
         void * const userdata = get_smart_ptr_userdata(ptr);
-        if (meta->kind & STATIC_ARRAY) {
+        if (meta->kind & DYNAMIC_ARRAY) {
             s_meta_array *arr_meta = get_smart_ptr_meta_array_(ptr);//(void *) (meta + 1);
             for (size_t i = 0; i < arr_meta->item_num; ++i)
                 meta->dtor((char *) ptr + arr_meta->item_size * i, userdata);
@@ -409,12 +410,10 @@ static inline size_t get_meta_header_size_(enum pointer_kind kind) {
     return kind & SHARED ? sizeof (s_meta_shared) : sizeof (s_meta_header);
 }
 static inline size_t get_meta_array_size_(enum pointer_kind kind) {
-//    return kind & STATIC_ARRAY ? sizeof(s_meta_array) : 0;
-    switch (kind & (STATIC_ARRAY | DYNAMIC_ARRAY)) {
-        case STATIC_ARRAY:
-            return sizeof(s_meta_array);
+//    return kind & DYNAMIC_ARRAY ? sizeof(s_meta_array) : 0;
+    switch (kind & DYNAMIC_ARRAY) {
         case DYNAMIC_ARRAY:
-//            return sizeof(s_meta_dynamic_array);
+            return sizeof(s_meta_array);
         default:
             return 0;
     }
@@ -429,7 +428,7 @@ static inline char* get_ptr_userdata_(const void* raw_ptr, enum pointer_kind kin
     return (char *) raw_ptr + get_meta_size_(kind);
 }
 CSPTR_MALLOC_API
-static void *smalloc_impl_(const s_smalloc_args *args) {
+void *smalloc_impl_(const s_smalloc_args *args) {
     if (!(args->item_size && args->item_cap))
         return NULL;
 
@@ -447,7 +446,7 @@ static void *smalloc_impl_(const s_smalloc_args *args) {
     if (args->userdata.size && args->userdata.data)
         memcpy(userdata_ptr, args->userdata.data, args->userdata.size);
 
-    if (args->kind & STATIC_ARRAY) {
+    if (args->kind & DYNAMIC_ARRAY) {
         s_meta_array *meta_array = get_ptr_meta_array_(raw_ptr, args->kind);
         *meta_array = (s_meta_array) {
                 .item_capacity = args->item_cap,
@@ -482,7 +481,7 @@ s_meta_array *get_smart_ptr_meta_array_(const void * const smart_ptr) {
 
     s_meta_header * const raw_ptr = get_smart_ptr_meta_(smart_ptr);
     assert(raw_ptr->ptr == smart_ptr);
-    if (!(raw_ptr->kind & STATIC_ARRAY) ){
+    if (!(raw_ptr->kind & DYNAMIC_ARRAY) ){
         return NULL;
     }
     size_t header_size = get_meta_header_size_(raw_ptr->kind);
@@ -503,11 +502,6 @@ void *get_smart_ptr_userdata(const void * const smart_ptr) {
         return NULL;
 
     return (char *) raw_ptr + header_size;
-}
-
-CSPTR_MALLOC_API
-void *smalloc_(s_smalloc_args *args) {
-    return smalloc_impl_(args);
 }
 
 void sfree(void *smart_ptr) {
